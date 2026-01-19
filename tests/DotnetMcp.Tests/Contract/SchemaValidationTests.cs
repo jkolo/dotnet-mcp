@@ -1,5 +1,6 @@
 using System.Text.Json;
 using DotnetMcp.Models;
+using DotnetMcp.Models.Breakpoints;
 using FluentAssertions;
 
 namespace DotnetMcp.Tests.Contract;
@@ -278,6 +279,253 @@ public class SchemaValidationTests
             ErrorCodes.LaunchFailed,
             ErrorCodes.InvalidPath,
             ErrorCodes.Timeout
+        };
+
+        foreach (var code in codes)
+        {
+            code.Should().NotBeNullOrEmpty();
+            code.Should().MatchRegex(@"^[A-Z_]+$", $"Error code '{code}' should be SCREAMING_SNAKE_CASE");
+        }
+    }
+
+    // ========== Breakpoint Schema Validation ==========
+
+    /// <summary>
+    /// BreakpointState enum values match contract.
+    /// </summary>
+    [Theory]
+    [InlineData(BreakpointState.Pending, "pending")]
+    [InlineData(BreakpointState.Bound, "bound")]
+    [InlineData(BreakpointState.Disabled, "disabled")]
+    public void BreakpointState_Serializes_ToLowercaseStrings(BreakpointState state, string expected)
+    {
+        // Contract expects lowercase: "pending", "bound", "disabled"
+        var lowered = state.ToString().ToLowerInvariant();
+        lowered.Should().Be(expected);
+    }
+
+    /// <summary>
+    /// BreakpointLocation serializes required fields.
+    /// </summary>
+    [Fact]
+    public void BreakpointLocation_Serializes_RequiredFields()
+    {
+        // Contract requires: file, line
+        // Optional: column, endLine, endColumn, functionName, moduleName
+        var location = new BreakpointLocation(
+            File: "/path/to/source.cs",
+            Line: 42,
+            Column: 8,
+            EndLine: 42,
+            EndColumn: 20,
+            FunctionName: "TestMethod",
+            ModuleName: "TestAssembly"
+        );
+
+        var json = JsonSerializer.Serialize(location, JsonOptions);
+        var doc = JsonDocument.Parse(json);
+        var root = doc.RootElement;
+
+        // Required fields
+        root.TryGetProperty("file", out var file).Should().BeTrue();
+        file.GetString().Should().Be("/path/to/source.cs");
+
+        root.TryGetProperty("line", out var line).Should().BeTrue();
+        line.GetInt32().Should().Be(42);
+
+        // Optional fields when provided
+        root.TryGetProperty("column", out var col).Should().BeTrue();
+        col.GetInt32().Should().Be(8);
+
+        root.TryGetProperty("functionName", out var func).Should().BeTrue();
+        func.GetString().Should().Be("TestMethod");
+    }
+
+    /// <summary>
+    /// BreakpointLocation with minimal fields omits optional fields.
+    /// </summary>
+    [Fact]
+    public void BreakpointLocation_WithMinimalFields_OmitsOptionalFields()
+    {
+        var location = new BreakpointLocation(
+            File: "/path/to/source.cs",
+            Line: 1
+        );
+
+        var json = JsonSerializer.Serialize(location, JsonOptions);
+        var doc = JsonDocument.Parse(json);
+        var root = doc.RootElement;
+
+        // Required fields should be present
+        root.TryGetProperty("file", out _).Should().BeTrue();
+        root.TryGetProperty("line", out _).Should().BeTrue();
+
+        // Object serializes without error
+        json.Should().NotBeNullOrEmpty();
+    }
+
+    /// <summary>
+    /// Breakpoint serializes all fields correctly.
+    /// </summary>
+    [Fact]
+    public void Breakpoint_Serializes_AllFields()
+    {
+        var breakpoint = new Breakpoint(
+            Id: "bp-550e8400-e29b-41d4-a716-446655440000",
+            Location: new BreakpointLocation("/path/to/source.cs", 42),
+            State: BreakpointState.Bound,
+            Enabled: true,
+            Verified: true,
+            HitCount: 3,
+            Condition: "x > 5",
+            Message: null
+        );
+
+        var json = JsonSerializer.Serialize(breakpoint, JsonOptions);
+        var doc = JsonDocument.Parse(json);
+        var root = doc.RootElement;
+
+        // All fields present
+        root.TryGetProperty("id", out var id).Should().BeTrue();
+        id.GetString().Should().Be("bp-550e8400-e29b-41d4-a716-446655440000");
+
+        root.TryGetProperty("location", out var loc).Should().BeTrue();
+        loc.TryGetProperty("file", out _).Should().BeTrue();
+        loc.TryGetProperty("line", out _).Should().BeTrue();
+
+        root.TryGetProperty("state", out _).Should().BeTrue();
+        root.TryGetProperty("enabled", out var enabled).Should().BeTrue();
+        enabled.GetBoolean().Should().BeTrue();
+
+        root.TryGetProperty("verified", out var verified).Should().BeTrue();
+        verified.GetBoolean().Should().BeTrue();
+
+        root.TryGetProperty("hitCount", out var hitCount).Should().BeTrue();
+        hitCount.GetInt32().Should().Be(3);
+
+        root.TryGetProperty("condition", out var condition).Should().BeTrue();
+        condition.GetString().Should().Be("x > 5");
+    }
+
+    /// <summary>
+    /// BreakpointHit serializes all required fields.
+    /// </summary>
+    [Fact]
+    public void BreakpointHit_Serializes_RequiredFields()
+    {
+        var hit = new BreakpointHit(
+            BreakpointId: "bp-123",
+            ThreadId: 5,
+            Timestamp: new DateTime(2024, 1, 1, 12, 0, 0, DateTimeKind.Utc),
+            Location: new BreakpointLocation("/path/to/source.cs", 42),
+            HitCount: 1,
+            ExceptionInfo: null
+        );
+
+        var json = JsonSerializer.Serialize(hit, JsonOptions);
+        var doc = JsonDocument.Parse(json);
+        var root = doc.RootElement;
+
+        root.TryGetProperty("breakpointId", out var bpId).Should().BeTrue();
+        bpId.GetString().Should().Be("bp-123");
+
+        root.TryGetProperty("threadId", out var tid).Should().BeTrue();
+        tid.GetInt32().Should().Be(5);
+
+        root.TryGetProperty("timestamp", out var ts).Should().BeTrue();
+        ts.GetDateTime().Should().Be(new DateTime(2024, 1, 1, 12, 0, 0, DateTimeKind.Utc));
+
+        root.TryGetProperty("location", out var loc).Should().BeTrue();
+        loc.TryGetProperty("file", out _).Should().BeTrue();
+
+        root.TryGetProperty("hitCount", out var hc).Should().BeTrue();
+        hc.GetInt32().Should().Be(1);
+    }
+
+    /// <summary>
+    /// ExceptionBreakpoint serializes all fields correctly.
+    /// </summary>
+    [Fact]
+    public void ExceptionBreakpoint_Serializes_AllFields()
+    {
+        var exBp = new ExceptionBreakpoint(
+            Id: "ex-123",
+            ExceptionType: "System.NullReferenceException",
+            BreakOnFirstChance: true,
+            BreakOnSecondChance: true,
+            IncludeSubtypes: true,
+            Enabled: true,
+            Verified: true,
+            HitCount: 0
+        );
+
+        var json = JsonSerializer.Serialize(exBp, JsonOptions);
+        var doc = JsonDocument.Parse(json);
+        var root = doc.RootElement;
+
+        root.TryGetProperty("id", out var id).Should().BeTrue();
+        id.GetString().Should().Be("ex-123");
+
+        root.TryGetProperty("exceptionType", out var exType).Should().BeTrue();
+        exType.GetString().Should().Be("System.NullReferenceException");
+
+        root.TryGetProperty("breakOnFirstChance", out var first).Should().BeTrue();
+        first.GetBoolean().Should().BeTrue();
+
+        root.TryGetProperty("breakOnSecondChance", out var second).Should().BeTrue();
+        second.GetBoolean().Should().BeTrue();
+
+        root.TryGetProperty("includeSubtypes", out var subtypes).Should().BeTrue();
+        subtypes.GetBoolean().Should().BeTrue();
+
+        root.TryGetProperty("enabled", out var enabled).Should().BeTrue();
+        enabled.GetBoolean().Should().BeTrue();
+
+        root.TryGetProperty("verified", out var verified).Should().BeTrue();
+        verified.GetBoolean().Should().BeTrue();
+
+        root.TryGetProperty("hitCount", out var hitCount).Should().BeTrue();
+        hitCount.GetInt32().Should().Be(0);
+    }
+
+    /// <summary>
+    /// ExceptionInfo serializes required fields.
+    /// </summary>
+    [Fact]
+    public void ExceptionInfo_Serializes_RequiredFields()
+    {
+        var info = new ExceptionInfo(
+            Type: "System.NullReferenceException",
+            Message: "Object reference not set",
+            IsFirstChance: true
+        );
+
+        var json = JsonSerializer.Serialize(info, JsonOptions);
+        var doc = JsonDocument.Parse(json);
+        var root = doc.RootElement;
+
+        root.TryGetProperty("type", out var type).Should().BeTrue();
+        type.GetString().Should().Be("System.NullReferenceException");
+
+        root.TryGetProperty("message", out var msg).Should().BeTrue();
+        msg.GetString().Should().Be("Object reference not set");
+
+        root.TryGetProperty("isFirstChance", out var first).Should().BeTrue();
+        first.GetBoolean().Should().BeTrue();
+    }
+
+    /// <summary>
+    /// Breakpoint error codes are defined.
+    /// </summary>
+    [Fact]
+    public void BreakpointErrorCodes_AllDefined_AreScreamingSnakeCase()
+    {
+        var codes = new[]
+        {
+            ErrorCodes.BreakpointNotFound,
+            ErrorCodes.InvalidLine,
+            ErrorCodes.InvalidColumn,
+            ErrorCodes.InvalidCondition
         };
 
         foreach (var code in codes)

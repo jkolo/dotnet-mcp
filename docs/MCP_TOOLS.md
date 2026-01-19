@@ -328,6 +328,102 @@ Wait for any breakpoint to be hit.
 
 ---
 
+### breakpoint_set_exception
+
+Set an exception breakpoint to break when specific exception types are thrown.
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `exception_type` | string | Yes | Full exception type name (e.g., System.NullReferenceException) |
+| `break_on_first_chance` | boolean | No | Break on first-chance exception (default: true) |
+| `break_on_second_chance` | boolean | No | Break on second-chance/unhandled exception (default: true) |
+| `include_subtypes` | boolean | No | Also break on derived exception types (default: true) |
+
+**Example:**
+```json
+{
+  "exception_type": "System.NullReferenceException",
+  "break_on_first_chance": true,
+  "break_on_second_chance": true,
+  "include_subtypes": true
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "breakpoint": {
+    "id": "ex-550e8400-e29b-41d4-a716-446655440000",
+    "exceptionType": "System.NullReferenceException",
+    "breakOnFirstChance": true,
+    "breakOnSecondChance": true,
+    "includeSubtypes": true,
+    "enabled": true,
+    "verified": true,
+    "hitCount": 0
+  }
+}
+```
+
+**Errors:**
+- `invalid_condition` — Invalid exception type format
+- `invalid_condition` — Must specify at least first-chance or second-chance
+
+---
+
+### breakpoint_enable
+
+Enable or disable a breakpoint without removing it.
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `id` | string | Yes | Breakpoint ID |
+| `enabled` | boolean | No | True to enable, false to disable (default: true) |
+
+**Example (disable):**
+```json
+{
+  "id": "bp-550e8400-e29b-41d4-a716-446655440000",
+  "enabled": false
+}
+```
+
+**Example (re-enable):**
+```json
+{
+  "id": "bp-550e8400-e29b-41d4-a716-446655440000",
+  "enabled": true
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "breakpoint": {
+    "id": "bp-550e8400-e29b-41d4-a716-446655440000",
+    "location": {
+      "file": "/app/Services/UserService.cs",
+      "line": 42
+    },
+    "state": "bound",
+    "enabled": false,
+    "verified": true,
+    "hitCount": 3
+  }
+}
+```
+
+**Errors:**
+- `breakpoint_not_found` — No breakpoint with given ID
+
+---
+
 ## Execution Control
 
 ### debug_continue

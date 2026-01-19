@@ -136,13 +136,13 @@ public class StateTests : IDisposable
     }
 
     [Fact]
-    public void StateTransition_FromDisconnected_ToDisconnected_IsValid()
+    public async Task StateTransition_FromDisconnected_ToDisconnected_IsValid()
     {
         // State should remain disconnected when nothing happens
         _sessionManager.GetCurrentState().Should().Be(SessionState.Disconnected);
 
         // After disconnect (no-op)
-        _sessionManager.DisconnectAsync().Wait();
+        await _sessionManager.DisconnectAsync();
         _sessionManager.GetCurrentState().Should().Be(SessionState.Disconnected);
     }
 

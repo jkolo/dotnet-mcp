@@ -1,4 +1,5 @@
 using DotnetMcp.Services;
+using DotnetMcp.Services.Breakpoints;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;
@@ -17,6 +18,13 @@ builder.Logging.SetMinimumLevel(LogLevel.Information);
 // Register debug services
 builder.Services.AddSingleton<IProcessDebugger, ProcessDebugger>();
 builder.Services.AddSingleton<IDebugSessionManager, DebugSessionManager>();
+
+// Register breakpoint services
+builder.Services.AddSingleton<PdbSymbolCache>();
+builder.Services.AddSingleton<IPdbSymbolReader, PdbSymbolReader>();
+builder.Services.AddSingleton<BreakpointRegistry>();
+builder.Services.AddSingleton<IConditionEvaluator, SimpleConditionEvaluator>();
+builder.Services.AddSingleton<IBreakpointManager, BreakpointManager>();
 
 // Configure MCP server with stdio transport
 builder.Services

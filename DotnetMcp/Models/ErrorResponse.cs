@@ -54,4 +54,27 @@ public static class ErrorCodes
 
     /// <summary>Operation timed out.</summary>
     public const string Timeout = "TIMEOUT";
+
+    // Breakpoint-specific error codes
+
+    /// <summary>Source file not found in any loaded module.</summary>
+    public const string InvalidFile = "INVALID_FILE";
+
+    /// <summary>Line number does not contain executable code.</summary>
+    public const string InvalidLine = "INVALID_LINE";
+
+    /// <summary>Column position invalid for breakpoint targeting.</summary>
+    public const string InvalidColumn = "INVALID_COLUMN";
+
+    /// <summary>Condition expression has syntax error.</summary>
+    public const string InvalidCondition = "INVALID_CONDITION";
+
+    /// <summary>Breakpoint ID does not exist.</summary>
+    public const string BreakpointNotFound = "BREAKPOINT_NOT_FOUND";
+
+    /// <summary>Breakpoint already exists at this location.</summary>
+    public const string BreakpointExists = "BREAKPOINT_EXISTS";
+
+    /// <summary>Condition evaluation failed at runtime.</summary>
+    public const string EvalFailed = "EVAL_FAILED";
 }

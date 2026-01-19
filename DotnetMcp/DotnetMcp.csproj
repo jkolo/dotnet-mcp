@@ -10,6 +10,10 @@
     </PropertyGroup>
 
     <ItemGroup>
+        <InternalsVisibleTo Include="DotnetMcp.Tests" />
+    </ItemGroup>
+
+    <ItemGroup>
         <PackageReference Include="ModelContextProtocol" Version="0.1.0-preview.13" />
         <PackageReference Include="ClrDebug" Version="0.3.4" />
         <PackageReference Include="Microsoft.Diagnostics.DbgShim.linux-x64" Version="9.0.661903" />
