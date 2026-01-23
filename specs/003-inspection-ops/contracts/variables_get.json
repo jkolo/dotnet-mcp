@@ -1,0 +1,81 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "variables_get",
+  "description": "Get variables for a stack frame",
+  "type": "object",
+  "properties": {
+    "name": {
+      "const": "variables_get"
+    },
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "thread_id": {
+          "type": "integer",
+          "description": "Thread ID (default: current thread)"
+        },
+        "frame_index": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 0,
+          "description": "Frame index (0 = top of stack)"
+        },
+        "scope": {
+          "type": "string",
+          "enum": ["all", "locals", "arguments", "this"],
+          "default": "all",
+          "description": "Which variables to return"
+        },
+        "expand": {
+          "type": "string",
+          "description": "Variable path to expand children (e.g., 'user.Address')"
+        }
+      },
+      "additionalProperties": false
+    },
+    "response": {
+      "type": "object",
+      "properties": {
+        "variables": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "name": {
+                "type": "string",
+                "description": "Variable name"
+              },
+              "type": {
+                "type": "string",
+                "description": "Full type name"
+              },
+              "value": {
+                "type": "string",
+                "description": "Display value (formatted for readability)"
+              },
+              "scope": {
+                "type": "string",
+                "enum": ["local", "argument", "this", "field", "property", "element"],
+                "description": "Where this variable comes from"
+              },
+              "has_children": {
+                "type": "boolean",
+                "description": "True if value can be expanded"
+              },
+              "children_count": {
+                "type": "integer",
+                "description": "Number of children if known"
+              },
+              "path": {
+                "type": "string",
+                "description": "Expansion path for nested variables"
+              }
+            },
+            "required": ["name", "type", "value", "scope", "has_children"]
+          }
+        }
+      },
+      "required": ["variables"]
+    }
+  }
+}

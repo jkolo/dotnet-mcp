@@ -1,0 +1,85 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "evaluate",
+  "description": "Evaluate an expression in the debuggee context",
+  "type": "object",
+  "properties": {
+    "name": {
+      "const": "evaluate"
+    },
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "expression": {
+          "type": "string",
+          "minLength": 1,
+          "description": "C# expression to evaluate"
+        },
+        "thread_id": {
+          "type": "integer",
+          "description": "Thread context (default: current thread)"
+        },
+        "frame_index": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 0,
+          "description": "Stack frame context (0 = top)"
+        },
+        "timeout_ms": {
+          "type": "integer",
+          "minimum": 100,
+          "maximum": 60000,
+          "default": 5000,
+          "description": "Evaluation timeout in milliseconds"
+        }
+      },
+      "required": ["expression"],
+      "additionalProperties": false
+    },
+    "response": {
+      "type": "object",
+      "properties": {
+        "success": {
+          "type": "boolean",
+          "description": "True if evaluation succeeded"
+        },
+        "value": {
+          "type": ["string", "null"],
+          "description": "Result value as display string"
+        },
+        "type": {
+          "type": ["string", "null"],
+          "description": "Result type name"
+        },
+        "has_children": {
+          "type": "boolean",
+          "description": "True if result can be expanded"
+        },
+        "error": {
+          "type": "object",
+          "properties": {
+            "code": {
+              "type": "string",
+              "enum": ["eval_timeout", "eval_exception", "syntax_error", "variable_unavailable"],
+              "description": "Error code"
+            },
+            "message": {
+              "type": "string",
+              "description": "Human-readable error message"
+            },
+            "exception_type": {
+              "type": "string",
+              "description": "Exception type if eval threw"
+            },
+            "position": {
+              "type": "integer",
+              "description": "Character position for syntax errors"
+            }
+          },
+          "required": ["code", "message"]
+        }
+      },
+      "required": ["success"]
+    }
+  }
+}

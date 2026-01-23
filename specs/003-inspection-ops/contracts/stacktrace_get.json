@@ -1,0 +1,113 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "stacktrace_get",
+  "description": "Get stack trace for a thread",
+  "type": "object",
+  "properties": {
+    "name": {
+      "const": "stacktrace_get"
+    },
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "thread_id": {
+          "type": "integer",
+          "description": "Thread ID (default: current thread)"
+        },
+        "start_frame": {
+          "type": "integer",
+          "minimum": 0,
+          "default": 0,
+          "description": "Start from frame N (for pagination)"
+        },
+        "max_frames": {
+          "type": "integer",
+          "minimum": 1,
+          "maximum": 1000,
+          "default": 20,
+          "description": "Maximum frames to return"
+        }
+      },
+      "additionalProperties": false
+    },
+    "response": {
+      "type": "object",
+      "properties": {
+        "thread_id": {
+          "type": "integer",
+          "description": "Thread ID for which stack was retrieved"
+        },
+        "total_frames": {
+          "type": "integer",
+          "description": "Total number of frames in the call stack"
+        },
+        "frames": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "index": {
+                "type": "integer",
+                "minimum": 0,
+                "description": "Frame index (0 = top of stack)"
+              },
+              "function": {
+                "type": "string",
+                "description": "Full method name (Namespace.Class.Method)"
+              },
+              "module": {
+                "type": "string",
+                "description": "Assembly name"
+              },
+              "location": {
+                "oneOf": [
+                  { "$ref": "#/definitions/source_location" },
+                  { "type": "null" }
+                ],
+                "description": "Source location if symbols available"
+              },
+              "is_external": {
+                "type": "boolean",
+                "description": "True if no source available (framework code)"
+              },
+              "arguments": {
+                "type": "array",
+                "items": { "$ref": "#/definitions/variable" },
+                "description": "Method arguments with values"
+              }
+            },
+            "required": ["index", "function", "module", "is_external"]
+          }
+        }
+      },
+      "required": ["thread_id", "total_frames", "frames"]
+    }
+  },
+  "definitions": {
+    "source_location": {
+      "type": "object",
+      "properties": {
+        "file": { "type": "string" },
+        "line": { "type": "integer", "minimum": 1 },
+        "column": { "type": "integer", "minimum": 1 },
+        "function": { "type": "string" }
+      },
+      "required": ["file", "line"]
+    },
+    "variable": {
+      "type": "object",
+      "properties": {
+        "name": { "type": "string" },
+        "type": { "type": "string" },
+        "value": { "type": "string" },
+        "scope": {
+          "type": "string",
+          "enum": ["local", "argument", "this", "field", "property", "element"]
+        },
+        "has_children": { "type": "boolean" },
+        "children_count": { "type": "integer" }
+      },
+      "required": ["name", "type", "value", "scope", "has_children"]
+    }
+  }
+}

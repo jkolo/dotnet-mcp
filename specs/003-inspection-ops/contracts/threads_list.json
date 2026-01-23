@@ -1,0 +1,67 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "threads_list",
+  "description": "List all managed threads in the debuggee process",
+  "type": "object",
+  "properties": {
+    "name": {
+      "const": "threads_list"
+    },
+    "parameters": {
+      "type": "object",
+      "properties": {},
+      "additionalProperties": false
+    },
+    "response": {
+      "type": "object",
+      "properties": {
+        "threads": {
+          "type": "array",
+          "items": {
+            "type": "object",
+            "properties": {
+              "id": {
+                "type": "integer",
+                "description": "OS thread ID"
+              },
+              "name": {
+                "type": ["string", "null"],
+                "description": "Thread name (may be null for unnamed threads)"
+              },
+              "state": {
+                "type": "string",
+                "enum": ["running", "stopped", "waiting", "not_started", "terminated"],
+                "description": "Current thread state"
+              },
+              "is_current": {
+                "type": "boolean",
+                "description": "True if this is the active/current thread"
+              },
+              "location": {
+                "oneOf": [
+                  { "$ref": "#/definitions/source_location" },
+                  { "type": "null" }
+                ],
+                "description": "Current location if thread is stopped"
+              }
+            },
+            "required": ["id", "state", "is_current"]
+          }
+        }
+      },
+      "required": ["threads"]
+    }
+  },
+  "definitions": {
+    "source_location": {
+      "type": "object",
+      "properties": {
+        "file": { "type": "string" },
+        "line": { "type": "integer", "minimum": 1 },
+        "column": { "type": "integer", "minimum": 1 },
+        "function": { "type": "string" }
+      },
+      "required": ["file", "line"]
+    }
+  }
+}
