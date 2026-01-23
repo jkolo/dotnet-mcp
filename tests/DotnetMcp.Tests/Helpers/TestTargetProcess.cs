@@ -1,4 +1,5 @@
 using System.Diagnostics;
+using System.Text;
 
 namespace DotnetMcp.Tests.Helpers;
 
@@ -9,6 +10,8 @@ public sealed class TestTargetProcess : IDisposable
 {
     private Process? _process;
     private bool _disposed;
+    private readonly StringBuilder _outputBuffer = new();
+    private readonly object _outputLock = new();
 
     /// <summary>
     /// Path to the test target DLL.
@@ -55,6 +58,7 @@ public sealed class TestTargetProcess : IDisposable
             UseShellExecute = false,
             RedirectStandardOutput = true,
             RedirectStandardError = true,
+            RedirectStandardInput = true,
             CreateNoWindow = true
         };
 
@@ -101,6 +105,86 @@ public sealed class TestTargetProcess : IDisposable
         {
             // Ignore errors during cleanup
         }
+    }
+
+    /// <summary>
+    /// Sends a command to the test target process.
+    /// </summary>
+    public async Task SendCommandAsync(string command)
+    {
+        if (_process == null)
+            throw new InvalidOperationException("Process not started");
+
+        await _process.StandardInput.WriteLineAsync(command);
+        await _process.StandardInput.FlushAsync();
+    }
+
+    /// <summary>
+    /// Waits for specific output from the process.
+    /// </summary>
+    public async Task<string?> WaitForOutputAsync(string expectedPrefix, TimeSpan timeout, CancellationToken cancellationToken = default)
+    {
+        if (_process == null)
+            throw new InvalidOperationException("Process not started");
+
+        using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        cts.CancelAfter(timeout);
+
+        try
+        {
+            while (!cts.Token.IsCancellationRequested)
+            {
+                var line = await _process.StandardOutput.ReadLineAsync(cts.Token);
+                if (line == null)
+                    return null;
+
+                lock (_outputLock)
+                {
+                    _outputBuffer.AppendLine(line);
+                }
+
+                if (line.StartsWith(expectedPrefix))
+                    return line;
+            }
+        }
+        catch (OperationCanceledException)
+        {
+            // Timeout
+        }
+
+        return null;
+    }
+
+    /// <summary>
+    /// Reads any available output without blocking.
+    /// </summary>
+    public string GetBufferedOutput()
+    {
+        lock (_outputLock)
+        {
+            return _outputBuffer.ToString();
+        }
+    }
+
+    /// <summary>
+    /// Path to the TestTargetApp source directory.
+    /// </summary>
+    public static string TestTargetSourceDirectory
+    {
+        get
+        {
+            var testAssemblyDir = Path.GetDirectoryName(typeof(TestTargetProcess).Assembly.Location)!;
+            return Path.GetFullPath(Path.Combine(
+                testAssemblyDir, "..", "..", "..", "..", "TestTargetApp"));
+        }
+    }
+
+    /// <summary>
+    /// Gets the full path to a source file in TestTargetApp.
+    /// </summary>
+    public static string GetSourceFilePath(string fileName)
+    {
+        return Path.Combine(TestTargetSourceDirectory, fileName);
     }
 
     public void Dispose()

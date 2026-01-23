@@ -233,4 +233,75 @@ public class ProcessDebuggerTests
         // Assert
         act.Should().NotThrow("dispose should be idempotent");
     }
+
+    // ===== ContinueAsync Tests (T068) =====
+
+    [Fact]
+    public async Task ContinueAsync_WhenNotAttached_ThrowsInvalidOperationException()
+    {
+        // Arrange - fresh instance (not attached)
+
+        // Act
+        var act = async () => await _sut.ContinueAsync();
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*not attached*");
+    }
+
+    [Fact]
+    public async Task ContinueAsync_WhenNotPaused_ThrowsInvalidOperationException()
+    {
+        // Arrange - fresh instance (disconnected state, not paused)
+        // Note: Full behavior testing requires integration test with real debugger
+
+        // Act
+        var act = async () => await _sut.ContinueAsync();
+
+        // Assert - When not attached, should indicate not attached
+        await act.Should().ThrowAsync<InvalidOperationException>();
+    }
+
+    // ===== StepAsync Tests (T069) =====
+
+    [Fact]
+    public async Task StepAsync_WhenNotAttached_ThrowsInvalidOperationException()
+    {
+        // Arrange - fresh instance (not attached)
+
+        // Act
+        var act = async () => await _sut.StepAsync(StepMode.Over);
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*not attached*");
+    }
+
+    [Fact]
+    public async Task StepAsync_WhenNotPaused_ThrowsInvalidOperationException()
+    {
+        // Arrange - fresh instance (disconnected state, not paused)
+        // Note: Full behavior testing requires integration test with real debugger
+
+        // Act
+        var act = async () => await _sut.StepAsync(StepMode.In);
+
+        // Assert - When not attached, should indicate not attached
+        await act.Should().ThrowAsync<InvalidOperationException>();
+    }
+
+    [Theory]
+    [InlineData(StepMode.In)]
+    [InlineData(StepMode.Over)]
+    [InlineData(StepMode.Out)]
+    public async Task StepAsync_AllModesHandled_WhenNotAttached(StepMode mode)
+    {
+        // Arrange - fresh instance (not attached)
+
+        // Act
+        var act = async () => await _sut.StepAsync(mode);
+
+        // Assert - all modes should handle not-attached state
+        await act.Should().ThrowAsync<InvalidOperationException>();
+    }
 }

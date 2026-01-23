@@ -23,6 +23,7 @@ public sealed class ProcessDebugger : IProcessDebugger, IDisposable
     private PauseReason? _currentPauseReason;
     private SourceLocation? _currentLocation;
     private int? _activeThreadId;
+    private StepMode? _pendingStepMode;
 
     public ProcessDebugger(ILogger<ProcessDebugger> logger)
     {
@@ -31,6 +32,21 @@ public sealed class ProcessDebugger : IProcessDebugger, IDisposable
 
     /// <inheritdoc />
     public event EventHandler<SessionStateChangedEventArgs>? StateChanged;
+
+    /// <inheritdoc />
+    public event EventHandler<BreakpointHitEventArgs>? BreakpointHit;
+
+    /// <inheritdoc />
+    public event EventHandler<ModuleLoadedEventArgs>? ModuleLoaded;
+
+    /// <inheritdoc />
+    public event EventHandler<ModuleUnloadedEventArgs>? ModuleUnloaded;
+
+    /// <inheritdoc />
+    public event EventHandler<StepCompleteEventArgs>? StepCompleted;
+
+    /// <inheritdoc />
+    public event EventHandler<ExceptionHitEventArgs>? ExceptionHit;
 
     /// <inheritdoc />
     public bool IsAttached
@@ -227,8 +243,12 @@ public sealed class ProcessDebugger : IProcessDebugger, IDisposable
                     }
                     _process = null;
                 }
-                _corDebug?.Terminate();
-                _corDebug = null;
+
+                // Note: Don't call _corDebug.Terminate() here - after detach the process
+                // continues running and ICorDebug may still have references.
+                // Terminate should only be called when the debugged process has exited.
+                // _corDebug can be reused for subsequent attach/launch operations.
+
                 UpdateState(SessionState.Disconnected);
             }
         }, cancellationToken);
@@ -453,14 +473,190 @@ public sealed class ProcessDebugger : IProcessDebugger, IDisposable
         });
     }
 
+    /// <inheritdoc />
+    public IReadOnlyList<LoadedModuleInfo> GetLoadedModules()
+    {
+        lock (_lock)
+        {
+            if (_process == null)
+            {
+                return Array.Empty<LoadedModuleInfo>();
+            }
+
+            var modules = new List<LoadedModuleInfo>();
+
+            try
+            {
+                // Enumerate all app domains
+                foreach (var appDomain in _process.AppDomains)
+                {
+                    // Enumerate all assemblies in the app domain
+                    foreach (var assembly in appDomain.Assemblies)
+                    {
+                        // Enumerate all modules in the assembly
+                        foreach (var module in assembly.Modules)
+                        {
+                            var moduleName = module.Name ?? string.Empty;
+                            var isDynamic = module.IsDynamic;
+                            var isInMemory = module.IsInMemory;
+
+                            modules.Add(new LoadedModuleInfo
+                            {
+                                ModulePath = moduleName,
+                                IsDynamic = isDynamic,
+                                IsInMemory = isInMemory,
+                                NativeModule = module
+                            });
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error enumerating loaded modules");
+            }
+
+            return modules;
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task ContinueAsync(CancellationToken cancellationToken = default)
+    {
+        await Task.Run(() =>
+        {
+            lock (_lock)
+            {
+                if (_process == null)
+                {
+                    throw new InvalidOperationException("Cannot continue: debugger is not attached to any process");
+                }
+
+                if (_currentState != SessionState.Paused)
+                {
+                    throw new InvalidOperationException($"Cannot continue: process is not paused (current state: {_currentState})");
+                }
+
+                _logger.LogDebug("Continuing execution...");
+                _process.Continue(false);
+                UpdateState(SessionState.Running);
+                _logger.LogInformation("Execution resumed");
+            }
+        }, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task StepAsync(StepMode mode, CancellationToken cancellationToken = default)
+    {
+        await Task.Run(() =>
+        {
+            lock (_lock)
+            {
+                if (_process == null)
+                {
+                    throw new InvalidOperationException("Cannot step: debugger is not attached to any process");
+                }
+
+                if (_currentState != SessionState.Paused)
+                {
+                    throw new InvalidOperationException($"Cannot step: process is not paused (current state: {_currentState})");
+                }
+
+                if (_activeThreadId == null)
+                {
+                    throw new InvalidOperationException("Cannot step: no active thread");
+                }
+
+                _logger.LogDebug("Stepping {Mode}...", mode);
+
+                // Get the active thread
+                var thread = GetThreadById(_activeThreadId.Value);
+                if (thread == null)
+                {
+                    throw new InvalidOperationException($"Cannot step: active thread {_activeThreadId} not found");
+                }
+
+                // Create stepper on the active frame
+                var frame = thread.ActiveFrame as CorDebugILFrame;
+                if (frame == null)
+                {
+                    throw new InvalidOperationException("Cannot step: no managed frame available");
+                }
+
+                var stepper = frame.CreateStepper();
+
+                // Track pending step for callback
+                _pendingStepMode = mode;
+
+                // Configure step based on mode
+                switch (mode)
+                {
+                    case StepMode.In:
+                        stepper.Step(bStepIn: true);
+                        break;
+                    case StepMode.Over:
+                        stepper.Step(bStepIn: false);
+                        break;
+                    case StepMode.Out:
+                        stepper.StepOut();
+                        break;
+                    default:
+                        throw new ArgumentOutOfRangeException(nameof(mode), mode, "Invalid step mode");
+                }
+
+                // Continue execution - the stepper will pause at the next step location
+                _process.Continue(false);
+                UpdateState(SessionState.Running);
+                _logger.LogInformation("Step {Mode} initiated", mode);
+            }
+        }, cancellationToken);
+    }
+
+    private CorDebugThread? GetThreadById(int threadId)
+    {
+        if (_process == null) return null;
+
+        foreach (var thread in _process.Threads)
+        {
+            if ((int)thread.Id == threadId)
+            {
+                return thread;
+            }
+        }
+        return null;
+    }
+
     public void Dispose()
     {
         lock (_lock)
         {
-            _process?.Detach();
-            _corDebug?.Terminate();
-            _process = null;
-            _corDebug = null;
+            if (_process != null)
+            {
+                try
+                {
+                    _process.Detach();
+                }
+                catch
+                {
+                    // Process may have already exited
+                }
+                _process = null;
+            }
+
+            if (_corDebug != null)
+            {
+                try
+                {
+                    // Terminate can throw CORDBG_E_ILLEGAL_SHUTDOWN_ORDER if process
+                    // was detached but is still running. This is safe to ignore.
+                    _corDebug.Terminate();
+                }
+                catch
+                {
+                    // Safe to ignore shutdown order errors
+                }
+                _corDebug = null;
+            }
         }
     }
 
@@ -468,46 +664,115 @@ public sealed class ProcessDebugger : IProcessDebugger, IDisposable
     {
         var callback = new CorDebugManagedCallback();
 
-        // Handle all events - call Continue by default for unhandled events
-        callback.OnAnyEvent += (sender, e) =>
+        // Note: OnAnyEvent fires BEFORE specific handlers for every event.
+        // Specific handlers below will call Continue when appropriate.
+        // Events without specific handlers would cause the process to hang,
+        // so we've added handlers for all known events.
+
+        // CRITICAL: Handle process creation (needed for attach)
+        callback.OnCreateProcess += (sender, e) =>
         {
-            // Continue execution for events we don't explicitly handle
-            // Note: Specific handlers below will NOT call Continue for pause events
+            _logger.LogDebug("Process created/attached");
+            e.Controller.Continue(false);
         };
 
         // CRITICAL: Must call Attach on new AppDomains
         callback.OnCreateAppDomain += (sender, e) =>
         {
+            _logger.LogDebug("AppDomain created: {Name}", e.AppDomain.Name);
             e.AppDomain.Attach();
+            e.Controller.Continue(false);
+        };
+
+        // Handle AppDomain exit
+        callback.OnExitAppDomain += (sender, e) =>
+        {
+            _logger.LogDebug("AppDomain exited");
             e.Controller.Continue(false);
         };
 
         // Handle breakpoint events
         callback.OnBreakpoint += (sender, e) =>
         {
-            var location = GetCurrentLocation(e.Thread);
+            var locationInfo = GetCurrentLocationInfo(e.Thread);
+            var location = locationInfo?.Location;
             var threadId = (int)e.Thread.Id;
+            var timestamp = DateTime.UtcNow;
 
             lock (_lock)
             {
                 UpdateState(SessionState.Paused, Models.PauseReason.Breakpoint, location, threadId);
             }
 
+            // Notify listeners about the breakpoint hit with full location info
+            BreakpointHit?.Invoke(this, new BreakpointHitEventArgs
+            {
+                ThreadId = threadId,
+                Location = location,
+                Timestamp = timestamp,
+                MethodToken = locationInfo?.MethodToken,
+                ILOffset = locationInfo?.ILOffset,
+                ModulePath = locationInfo?.ModulePath
+            });
+
             // Don't call Continue - let the session manager decide
         };
 
-        // Handle exception events
+        // Handle exception events (ManagedCallback1 - legacy, continue execution)
         callback.OnException += (sender, e) =>
+        {
+            // ManagedCallback1 OnException is called for first-chance exceptions
+            // We use OnException2 for detailed handling, so just continue here
+            e.Controller.Continue(false);
+        };
+
+        // Handle exception events with first-chance/second-chance differentiation (ManagedCallback2)
+        callback.OnException2 += (sender, e) =>
         {
             var location = GetCurrentLocation(e.Thread);
             var threadId = (int)e.Thread.Id;
+            var timestamp = DateTime.UtcNow;
 
-            lock (_lock)
+            // Determine exception type from event
+            var isFirstChance = e.EventType == ClrDebug.CorDebugExceptionCallbackType.DEBUG_EXCEPTION_FIRST_CHANCE ||
+                                e.EventType == ClrDebug.CorDebugExceptionCallbackType.DEBUG_EXCEPTION_USER_FIRST_CHANCE;
+            var isUnhandled = e.EventType == ClrDebug.CorDebugExceptionCallbackType.DEBUG_EXCEPTION_UNHANDLED;
+
+            // Get exception information from the thread
+            var (exceptionType, exceptionMessage) = GetExceptionInfo(e.Thread);
+
+            _logger.LogDebug("Exception2: {Type} at {Location}, firstChance={IsFirstChance}, unhandled={IsUnhandled}",
+                exceptionType, location?.File, isFirstChance, isUnhandled);
+
+            // Fire the exception hit event for exception breakpoint matching
+            ExceptionHit?.Invoke(this, new ExceptionHitEventArgs
             {
-                UpdateState(SessionState.Paused, Models.PauseReason.Exception, location, threadId);
-            }
+                ThreadId = threadId,
+                Location = location,
+                Timestamp = timestamp,
+                ExceptionType = exceptionType,
+                ExceptionMessage = exceptionMessage,
+                IsFirstChance = isFirstChance,
+                IsUnhandled = isUnhandled
+            });
 
-            // Don't call Continue - let the session manager decide
+            // Only pause for unhandled exceptions by default
+            // Exception breakpoints will control pausing for first-chance
+            if (isUnhandled)
+            {
+                lock (_lock)
+                {
+                    UpdateState(SessionState.Paused, Models.PauseReason.Exception, location, threadId);
+                }
+                // Don't call Continue - let the session manager decide
+            }
+            else
+            {
+                // For first-chance exceptions, let the BreakpointManager decide
+                // based on registered exception breakpoints
+                // If no exception breakpoint handlers stop it, continue
+                e.Controller.Continue(false);
+            }
         };
 
         // Handle process exit
@@ -521,10 +786,73 @@ public sealed class ProcessDebugger : IProcessDebugger, IDisposable
             e.Controller.Continue(false);
         };
 
-        // Handle module loads (for module tracking)
+        // Handle module loads (for pending breakpoint binding)
         callback.OnLoadModule += (sender, e) =>
         {
+            try
+            {
+                var module = e.Module;
+                var moduleName = module.Name ?? string.Empty;
+                var isDynamic = module.IsDynamic;
+                var isInMemory = module.IsInMemory;
+
+                // Get base address and size if available
+                ulong baseAddress = 0;
+                uint size = 0;
+                try
+                {
+                    baseAddress = (ulong)module.BaseAddress;
+                    size = (uint)module.Size;
+                }
+                catch
+                {
+                    // Some modules may not have this info
+                }
+
+                _logger.LogDebug("Module loaded: {ModuleName} (dynamic={IsDynamic}, inMemory={IsInMemory})",
+                    moduleName, isDynamic, isInMemory);
+
+                // Fire module loaded event for breakpoint binding
+                ModuleLoaded?.Invoke(this, new ModuleLoadedEventArgs
+                {
+                    ModulePath = moduleName,
+                    BaseAddress = baseAddress,
+                    Size = size,
+                    IsDynamic = isDynamic,
+                    IsInMemory = isInMemory,
+                    NativeModule = module
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error processing module load event");
+            }
+
             // Continue after module load
+            e.Controller.Continue(false);
+        };
+
+        // Handle module unloads (for bound breakpoint invalidation)
+        callback.OnUnloadModule += (sender, e) =>
+        {
+            try
+            {
+                var module = e.Module;
+                var moduleName = module.Name ?? string.Empty;
+
+                _logger.LogDebug("Module unloaded: {ModuleName}", moduleName);
+
+                // Fire module unloaded event for breakpoint state transition
+                ModuleUnloaded?.Invoke(this, new ModuleUnloadedEventArgs
+                {
+                    ModulePath = moduleName
+                });
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Error processing module unload event");
+            }
+
             e.Controller.Continue(false);
         };
 
@@ -546,10 +874,143 @@ public sealed class ProcessDebugger : IProcessDebugger, IDisposable
             e.Controller.Continue(false);
         };
 
+        // Handle step complete
+        callback.OnStepComplete += (sender, e) =>
+        {
+            var location = GetCurrentLocation(e.Thread);
+            var threadId = (int)e.Thread.Id;
+            var timestamp = DateTime.UtcNow;
+
+            // Get the step mode that was pending
+            StepMode stepMode;
+            lock (_lock)
+            {
+                stepMode = _pendingStepMode ?? StepMode.Over;
+                _pendingStepMode = null;
+                UpdateState(SessionState.Paused, Models.PauseReason.Step, location, threadId);
+            }
+
+            // Map ClrDebug step reason to our enum
+            var reason = e.Reason switch
+            {
+                ClrDebug.CorDebugStepReason.STEP_NORMAL => StepCompleteReason.Normal,
+                ClrDebug.CorDebugStepReason.STEP_RETURN => StepCompleteReason.Normal,
+                ClrDebug.CorDebugStepReason.STEP_CALL => StepCompleteReason.Normal,
+                ClrDebug.CorDebugStepReason.STEP_EXCEPTION_FILTER => StepCompleteReason.Exception,
+                ClrDebug.CorDebugStepReason.STEP_EXCEPTION_HANDLER => StepCompleteReason.Exception,
+                ClrDebug.CorDebugStepReason.STEP_INTERCEPT => StepCompleteReason.Interrupted,
+                ClrDebug.CorDebugStepReason.STEP_EXIT => StepCompleteReason.Normal,
+                _ => StepCompleteReason.Normal
+            };
+
+            _logger.LogDebug("Step complete: thread={ThreadId}, reason={Reason}, location={Location}",
+                threadId, reason, location?.File);
+
+            // Notify listeners
+            StepCompleted?.Invoke(this, new StepCompleteEventArgs
+            {
+                ThreadId = threadId,
+                Location = location,
+                StepMode = stepMode,
+                Reason = reason,
+                Timestamp = timestamp
+            });
+
+            // Don't call Continue - let the session manager decide
+        };
+
+        // Handle debug break (Ctrl+C or Debugger.Break())
+        callback.OnBreak += (sender, e) =>
+        {
+            var location = GetCurrentLocation(e.Thread);
+            var threadId = (int)e.Thread.Id;
+
+            lock (_lock)
+            {
+                UpdateState(SessionState.Paused, Models.PauseReason.Pause, location, threadId);
+            }
+
+            _logger.LogDebug("Debug break on thread {ThreadId}", threadId);
+            // Don't call Continue - let the session manager decide
+        };
+
+        // Handle assembly unload
+        callback.OnUnloadAssembly += (sender, e) =>
+        {
+            e.Controller.Continue(false);
+        };
+
+        // Handle log messages
+        callback.OnLogMessage += (sender, e) =>
+        {
+            _logger.LogDebug("Target log: [{Level}] {Message}", e.LogSwitchName, e.Message);
+            e.Controller.Continue(false);
+        };
+
+        // Handle log switch changes
+        callback.OnLogSwitch += (sender, e) =>
+        {
+            e.Controller.Continue(false);
+        };
+
+        // Handle name changes (thread/process renamed)
+        callback.OnNameChange += (sender, e) =>
+        {
+            e.Controller.Continue(false);
+        };
+
+        // Handle symbol updates
+        callback.OnUpdateModuleSymbols += (sender, e) =>
+        {
+            e.Controller.Continue(false);
+        };
+
+        // Handle debugger errors
+        callback.OnDebuggerError += (sender, e) =>
+        {
+            _logger.LogError("Debugger error: HRESULT=0x{ErrorHR:X8}, ErrorCode={ErrorCode}",
+                (uint)e.ErrorHR, e.ErrorCode);
+            e.Controller.Continue(false);
+        };
+
+        // Handle eval completion
+        callback.OnEvalComplete += (sender, e) =>
+        {
+            e.Controller.Continue(false);
+        };
+
+        // Handle eval exception
+        callback.OnEvalException += (sender, e) =>
+        {
+            e.Controller.Continue(false);
+        };
+
+        // Handle edit and continue remap
+        callback.OnEditAndContinueRemap += (sender, e) =>
+        {
+            e.Controller.Continue(false);
+        };
+
+        // Handle break on exception
+        callback.OnBreakpointSetError += (sender, e) =>
+        {
+            _logger.LogWarning("Breakpoint set error on thread {ThreadId}", e.Thread.Id);
+            e.Controller.Continue(false);
+        };
+
         return callback;
     }
 
     private static SourceLocation? GetCurrentLocation(CorDebugThread thread)
+    {
+        var info = GetCurrentLocationInfo(thread);
+        return info?.Location;
+    }
+
+    /// <summary>
+    /// Gets detailed location information including IL offset for PDB mapping.
+    /// </summary>
+    private static LocationInfo? GetCurrentLocationInfo(CorDebugThread thread)
     {
         try
         {
@@ -558,14 +1019,38 @@ public sealed class ProcessDebugger : IProcessDebugger, IDisposable
 
             var function = frame.Function;
             var module = function.Module;
+            var methodToken = (int)function.Token;
 
-            // Note: Source location extraction requires PDB reading
-            // This is a placeholder - full implementation would use System.Reflection.Metadata
-            return new SourceLocation(
+            // Try to get IL offset from the frame
+            int? ilOffset = null;
+            try
+            {
+                // Cast to ILFrame to get IP
+                var ilFrame = frame.Raw as ClrDebug.ICorDebugILFrame;
+                if (ilFrame != null)
+                {
+                    ilFrame.GetIP(out var nOffset, out _);
+                    ilOffset = (int)nOffset;
+                }
+            }
+            catch
+            {
+                // IL offset not available
+            }
+
+            // Create basic location - PDB reading will enhance this later
+            var location = new SourceLocation(
                 File: "Unknown",
                 Line: 0,
-                FunctionName: $"0x{function.Token:X8}",
+                FunctionName: $"0x{methodToken:X8}",
                 ModuleName: module.Name
+            );
+
+            return new LocationInfo(
+                Location: location,
+                MethodToken: methodToken,
+                ILOffset: ilOffset,
+                ModulePath: module.Name
             );
         }
         catch
@@ -573,4 +1058,149 @@ public sealed class ProcessDebugger : IProcessDebugger, IDisposable
             return null;
         }
     }
+
+    /// <summary>
+    /// Extracts exception type and message from the current exception on a thread.
+    /// </summary>
+    private static (string Type, string Message) GetExceptionInfo(CorDebugThread thread)
+    {
+        try
+        {
+            // Get the current exception object from the thread
+            var exceptionValue = thread.CurrentException;
+            if (exceptionValue == null)
+            {
+                return ("Unknown", "");
+            }
+
+            // Get the exception type
+            var exceptionType = GetExceptionTypeName(exceptionValue);
+
+            // Try to get the exception message
+            // Note: Full message extraction requires ICorDebugEval which is complex
+            // For now, just return the type name
+            var exceptionMessage = TryGetExceptionMessage(exceptionValue);
+
+            return (exceptionType, exceptionMessage);
+        }
+        catch (Exception ex)
+        {
+            // Log is not available in static method, return empty
+            return ("Unknown", $"Error getting exception info: {ex.Message}");
+        }
+    }
+
+    /// <summary>
+    /// Gets the type name of an exception from its ICorDebugValue.
+    /// </summary>
+    private static string GetExceptionTypeName(CorDebugValue exceptionValue)
+    {
+        try
+        {
+            // Dereference if it's a reference
+            var value = exceptionValue;
+            if (value is CorDebugReferenceValue refValue)
+            {
+                var dereferencedValue = refValue.Dereference();
+                if (dereferencedValue != null)
+                {
+                    value = dereferencedValue;
+                }
+            }
+
+            // Get the object value
+            if (value is CorDebugObjectValue objValue)
+            {
+                var classType = objValue.Class;
+                if (classType != null)
+                {
+                    // Get the type token
+                    var typeToken = classType.Token;
+
+                    // Get the module to look up the type name
+                    var module = classType.Module;
+                    if (module != null)
+                    {
+                        // Try to get the type name from metadata
+                        try
+                        {
+                            var metaImport = module.GetMetaDataInterface<ClrDebug.MetaDataImport>();
+                            var typeProps = metaImport.GetTypeDefProps((int)typeToken);
+                            return typeProps.szTypeDef ?? $"Type:0x{typeToken:X8}";
+                        }
+                        catch
+                        {
+                            return $"Type:0x{typeToken:X8}";
+                        }
+                    }
+                }
+            }
+
+            // Try ExactType property as fallback
+            try
+            {
+                var exactType = value.ExactType;
+                if (exactType != null)
+                {
+                    var typeClass = exactType.Class;
+                    if (typeClass != null)
+                    {
+                        var typeToken = typeClass.Token;
+                        var module = typeClass.Module;
+                        if (module != null)
+                        {
+                            try
+                            {
+                                var metaImport = module.GetMetaDataInterface<ClrDebug.MetaDataImport>();
+                                var typeProps = metaImport.GetTypeDefProps((int)typeToken);
+                                return typeProps.szTypeDef ?? $"Type:0x{typeToken:X8}";
+                            }
+                            catch
+                            {
+                                return $"Type:0x{typeToken:X8}";
+                            }
+                        }
+                    }
+                }
+            }
+            catch
+            {
+                // ExactType not available
+            }
+
+            return "Unknown";
+        }
+        catch
+        {
+            return "Unknown";
+        }
+    }
+
+    /// <summary>
+    /// Attempts to get the exception message from an ICorDebugValue.
+    /// Note: Full implementation requires ICorDebugEval to call get_Message().
+    /// This is a simplified version that returns empty string.
+    /// </summary>
+    private static string TryGetExceptionMessage(CorDebugValue exceptionValue)
+    {
+        // Getting the Message property requires calling the getter method via ICorDebugEval
+        // which is complex and requires the process to be stopped in a specific way.
+        // For T074, this is marked as incomplete - full implementation would:
+        // 1. Get the Message property getter method token
+        // 2. Create an ICorDebugEval
+        // 3. Call the method and wait for completion
+        // 4. Extract the string result
+        //
+        // For now, return empty string - the exception type is the most important info
+        return "";
+    }
+
+    /// <summary>
+    /// Internal record for passing location information.
+    /// </summary>
+    private sealed record LocationInfo(
+        SourceLocation Location,
+        int MethodToken,
+        int? ILOffset,
+        string ModulePath);
 }

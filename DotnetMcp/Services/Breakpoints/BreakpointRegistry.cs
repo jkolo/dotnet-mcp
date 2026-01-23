@@ -115,6 +115,52 @@ public sealed class BreakpointRegistry
     }
 
     /// <summary>
+    /// Gets all bound breakpoints for a specific module.
+    /// </summary>
+    /// <param name="modulePath">Path to the module.</param>
+    /// <returns>List of bound breakpoints for the module.</returns>
+    public IReadOnlyList<Breakpoint> GetBoundForModule(string modulePath)
+    {
+        var normalizedPath = NormalizePath(modulePath);
+        return _breakpoints.Values
+            .Where(e => e.Breakpoint.State == BreakpointState.Bound &&
+                        e.ModulePath != null &&
+                        NormalizePath(e.ModulePath).Equals(normalizedPath, StringComparison.OrdinalIgnoreCase))
+            .Select(e => e.Breakpoint)
+            .ToList();
+    }
+
+    /// <summary>
+    /// Updates a breakpoint's native handle and module path when bound.
+    /// </summary>
+    /// <param name="breakpointId">The breakpoint ID.</param>
+    /// <param name="nativeBreakpoint">The ICorDebugFunctionBreakpoint handle.</param>
+    /// <param name="modulePath">Path to the module containing the breakpoint.</param>
+    /// <returns>True if updated, false if not found.</returns>
+    public bool SetNativeBreakpoint(string breakpointId, object? nativeBreakpoint, string? modulePath)
+    {
+        if (_breakpoints.TryGetValue(breakpointId, out var entry))
+        {
+            entry.NativeBreakpoint = nativeBreakpoint;
+            entry.ModulePath = modulePath;
+            _logger.LogDebug("Set native breakpoint for {Id} in module {Module}",
+                breakpointId, modulePath);
+            return true;
+        }
+        return false;
+    }
+
+    /// <summary>
+    /// Gets the native breakpoint handle for a breakpoint.
+    /// </summary>
+    /// <param name="breakpointId">The breakpoint ID.</param>
+    /// <returns>The native handle, or null if not bound.</returns>
+    public object? GetNativeBreakpoint(string breakpointId)
+    {
+        return _breakpoints.TryGetValue(breakpointId, out var entry) ? entry.NativeBreakpoint : null;
+    }
+
+    /// <summary>
     /// Adds an exception breakpoint to the registry.
     /// </summary>
     /// <param name="exceptionBreakpoint">The exception breakpoint to add.</param>
@@ -259,12 +305,15 @@ public sealed class BreakpointRegistry
     /// <summary>
     /// Internal entry for tracking breakpoint with potential native handle.
     /// </summary>
-    private sealed class BreakpointEntry
+    internal sealed class BreakpointEntry
     {
         public Breakpoint Breakpoint { get; set; }
 
         // Will hold ICorDebugFunctionBreakpoint when bound
         public object? NativeBreakpoint { get; set; }
+
+        // Path to the module containing this breakpoint (when bound)
+        public string? ModulePath { get; set; }
 
         public BreakpointEntry(Breakpoint breakpoint)
         {

@@ -75,7 +75,7 @@
 - [x] T018 [P] [US1] Contract test for breakpoint_set schema in tests/DotnetMcp.Tests/Contract/BreakpointSetContractTests.cs
 - [x] T019 [P] [US1] Unit test for PdbSymbolReader.FindILOffset in tests/DotnetMcp.Tests/Unit/PdbSymbolReaderTests.cs
 - [x] T020 [P] [US1] Unit test for BreakpointManager.SetBreakpointAsync in tests/DotnetMcp.Tests/Unit/BreakpointManagerTests.cs
-- [ ] T021 [US1] Integration test for set breakpoint workflow in tests/DotnetMcp.Tests/Integration/SetBreakpointTests.cs
+- [x] T021 [US1] Integration test for set breakpoint workflow in tests/DotnetMcp.Tests/Integration/BreakpointIntegrationTests.cs
 
 ### Implementation for User Story 1
 
@@ -103,14 +103,14 @@
 
 - [x] T031 [P] [US2] Contract test for breakpoint_wait schema in tests/DotnetMcp.Tests/Contract/BreakpointWaitContractTests.cs
 - [x] T032 [P] [US2] Unit test for hit queue and timeout in tests/DotnetMcp.Tests/Unit/BreakpointManagerTests.cs
-- [ ] T033 [US2] Integration test for wait with hit in tests/DotnetMcp.Tests/Integration/WaitBreakpointTests.cs
+- [x] T033 [US2] Integration test for wait with hit in tests/DotnetMcp.Tests/Integration/BreakpointIntegrationTests.cs
 
 ### Implementation for User Story 2
 
 - [x] T034 [US2] Create BreakpointHitQueue for queuing hit events in DotnetMcp/Services/Breakpoints/BreakpointHitQueue.cs
-- [ ] T035 [US2] Implement ManagedCallback.OnBreakpoint handler to queue hits in DotnetMcp/Services/ProcessDebugger.cs
+- [x] T035 [US2] Implement ManagedCallback.OnBreakpoint handler to queue hits in DotnetMcp/Services/ProcessDebugger.cs
 - [x] T036 [US2] Implement hit count tracking in BreakpointRegistry on each hit
-- [ ] T037 [US2] Extract source location from ICorDebugILFrame.GetIP on breakpoint hit
+- [x] T037 [US2] Extract source location from ICorDebugILFrame.GetIP on breakpoint hit
 - [x] T038 [US2] Implement BreakpointManager.WaitForHitAsync with timeout support in BreakpointManager.cs
 - [x] T039 [US2] Create breakpoint_wait MCP tool in DotnetMcp/Tools/BreakpointWaitTool.cs
 - [x] T040 [US2] Handle timeout response (hit=false, timeout=true) in breakpoint_wait
@@ -130,7 +130,7 @@
 
 - [x] T042 [P] [US3] Contract test for breakpoint_list schema in tests/DotnetMcp.Tests/Contract/BreakpointListContractTests.cs
 - [x] T043 [P] [US3] Unit test for list with various breakpoint states in tests/DotnetMcp.Tests/Unit/BreakpointManagerTests.cs
-- [ ] T044 [US3] Integration test for list operations in tests/DotnetMcp.Tests/Integration/ListBreakpointsTests.cs
+- [x] T044 [US3] Integration test for list operations in tests/DotnetMcp.Tests/Integration/BreakpointIntegrationTests.cs
 
 ### Implementation for User Story 3
 
@@ -154,7 +154,7 @@
 
 - [x] T050 [P] [US4] Contract test for breakpoint_remove schema in tests/DotnetMcp.Tests/Contract/BreakpointRemoveContractTests.cs
 - [x] T051 [P] [US4] Unit test for remove operations in tests/DotnetMcp.Tests/Unit/BreakpointManagerTests.cs
-- [ ] T052 [US4] Integration test for remove workflow in tests/DotnetMcp.Tests/Integration/RemoveBreakpointTests.cs
+- [x] T052 [US4] Integration test for remove workflow in tests/DotnetMcp.Tests/Integration/BreakpointIntegrationTests.cs
 
 ### Implementation for User Story 4
 
@@ -178,13 +178,13 @@
 
 - [x] T058 [P] [US5] Unit test for condition storage in breakpoint model in tests/DotnetMcp.Tests/Unit/BreakpointTests.cs
 - [x] T059 [P] [US5] Unit test for simple condition evaluation in tests/DotnetMcp.Tests/Unit/ConditionEvaluatorTests.cs
-- [ ] T060 [US5] Integration test for conditional breakpoint in tests/DotnetMcp.Tests/Integration/ConditionalBreakpointTests.cs
+- [x] T060 [US5] Integration test for conditional breakpoint in tests/DotnetMcp.Tests/Integration/BreakpointIntegrationTests.cs
 
 ### Implementation for User Story 5
 
 - [x] T061 [US5] Create IConditionEvaluator interface in DotnetMcp/Services/Breakpoints/IConditionEvaluator.cs
 - [x] T062 [US5] Implement simple condition parsing (hit count, literals) in DotnetMcp/Services/Breakpoints/SimpleConditionEvaluator.cs
-- [ ] T063 [US5] Implement ICorDebugEval-based condition evaluation in DotnetMcp/Services/Breakpoints/DebuggerConditionEvaluator.cs
+- [ ] T063 [US5] Implement ICorDebugEval-based condition evaluation in DotnetMcp/Services/Breakpoints/DebuggerConditionEvaluator.cs - DEFERRED: Requires thread at GC/FuncEval safe point; SimpleConditionEvaluator covers hitCount-based conditions
 - [x] T064 [US5] Integrate condition evaluation in OnBreakpoint callback (silent continue if false)
 - [x] T065 [US5] Add condition parameter to breakpoint_set tool
 - [x] T066 [US5] Add INVALID_CONDITION error handling with syntax error position
@@ -204,14 +204,14 @@
 
 - [x] T068 [P] [US6] Contract test for breakpoint_set_exception schema in tests/DotnetMcp.Tests/Contract/BreakpointSetExceptionContractTests.cs
 - [x] T069 [P] [US6] Unit test for exception breakpoint registration in tests/DotnetMcp.Tests/Unit/ExceptionBreakpointTests.cs
-- [ ] T070 [US6] Integration test for exception breakpoint in tests/DotnetMcp.Tests/Integration/ExceptionBreakpointTests.cs
+- [x] T070 [US6] Integration test for exception breakpoint in tests/DotnetMcp.Tests/Integration/BreakpointIntegrationTests.cs
 
 ### Implementation for User Story 6
 
 - [x] T071 [US6] Create ExceptionBreakpointRegistry in DotnetMcp/Services/Breakpoints/ExceptionBreakpointRegistry.cs (integrated into BreakpointRegistry)
-- [ ] T072 [US6] Implement ManagedCallback2.Exception handler for first-chance/second-chance in DotnetMcp/Services/ProcessDebugger.cs
+- [x] T072 [US6] Implement ManagedCallback2.Exception handler for first-chance/second-chance in DotnetMcp/Services/ProcessDebugger.cs
 - [x] T073 [US6] Implement exception type matching (including subtypes via IsAssignableTo) in ExceptionBreakpointRegistry
-- [ ] T074 [US6] Extract exception message from ICorDebugValue on exception hit
+- [x] T074 [US6] Extract exception message from ICorDebugValue on exception hit - PARTIAL: Type name extracted; message extraction requires ICorDebugEval (same as T063)
 - [x] T075 [US6] Create breakpoint_set_exception MCP tool in DotnetMcp/Tools/BreakpointSetExceptionTool.cs
 - [x] T076 [US6] Include ExceptionInfo in breakpoint_wait response when exception breakpoint hit
 - [x] T077 [US6] Add logging for exception breakpoint operations
@@ -224,11 +224,11 @@
 
 **Purpose**: Handle breakpoints set before target module loads
 
-- [ ] T078 Implement pending breakpoint binding in OnModuleLoad callback in DotnetMcp/Services/ProcessDebugger.cs
-- [ ] T079 [P] Transition breakpoint state Pending→Bound when module loads
-- [ ] T080 [P] Transition breakpoint state Bound→Pending when module unloads
-- [ ] T081 Notify breakpoint verified via status update when pending becomes bound
-- [ ] T082 Add logging for pending breakpoint state transitions
+- [x] T078 Implement pending breakpoint binding in OnModuleLoad callback in DotnetMcp/Services/ProcessDebugger.cs
+- [x] T079 [P] Transition breakpoint state Pending→Bound when module loads
+- [x] T080 [P] Transition breakpoint state Bound→Pending when module unloads
+- [x] T081 Notify breakpoint verified via status update when pending becomes bound
+- [x] T082 Add logging for pending breakpoint state transitions
 
 ---
 

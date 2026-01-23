@@ -266,6 +266,119 @@ public sealed class PdbSymbolReader : IPdbSymbolReader
             .First();
     }
 
+    /// <inheritdoc />
+    public Task<SourceLocationResult?> FindSourceLocationAsync(
+        string assemblyPath,
+        int methodToken,
+        int ilOffset,
+        CancellationToken cancellationToken = default)
+    {
+        var reader = _cache.GetOrCreateReader(assemblyPath);
+        if (reader == null)
+        {
+            _logger.LogDebug("No PDB available for {AssemblyPath}", assemblyPath);
+            return Task.FromResult<SourceLocationResult?>(null);
+        }
+
+        // Convert method token to MethodDebugInformationHandle
+        var methodDefHandle = MetadataTokens.MethodDefinitionHandle(methodToken);
+        var methodDebugInfoHandle = methodDefHandle.ToDebugInformationHandle();
+
+        try
+        {
+            var debugInfo = reader.GetMethodDebugInformation(methodDebugInfoHandle);
+            if (debugInfo.Document.IsNil)
+            {
+                _logger.LogDebug("No debug info for method token {Token:X8}", methodToken);
+                return Task.FromResult<SourceLocationResult?>(null);
+            }
+
+            // Get the document path
+            var document = reader.GetDocument(debugInfo.Document);
+            var documentPath = reader.GetString(document.Name);
+
+            // Find the sequence point at or before the IL offset
+            SequencePoint? matchingSequencePoint = null;
+            string? functionName = null;
+
+            foreach (var sp in debugInfo.GetSequencePoints())
+            {
+                cancellationToken.ThrowIfCancellationRequested();
+
+                if (sp.IsHidden)
+                {
+                    continue;
+                }
+
+                // Find the sequence point with largest offset <= ilOffset
+                if (sp.Offset <= ilOffset)
+                {
+                    if (matchingSequencePoint == null || sp.Offset > matchingSequencePoint.Value.Offset)
+                    {
+                        matchingSequencePoint = sp;
+                    }
+                }
+            }
+
+            if (matchingSequencePoint == null)
+            {
+                _logger.LogDebug("No sequence point found for IL offset {Offset} in method {Token:X8}",
+                    ilOffset, methodToken);
+                return Task.FromResult<SourceLocationResult?>(null);
+            }
+
+            // Try to get the method name from metadata
+            try
+            {
+                var methodDef = reader.GetMethodDefinition(methodDefHandle);
+                functionName = reader.GetString(methodDef.Name);
+            }
+            catch
+            {
+                // Method name lookup failed, use token as fallback
+                functionName = $"0x{methodToken:X8}";
+            }
+
+            var sp2 = matchingSequencePoint.Value;
+            var result = new SourceLocationResult(
+                FilePath: documentPath,
+                Line: sp2.StartLine,
+                Column: sp2.StartColumn,
+                EndLine: sp2.EndLine,
+                EndColumn: sp2.EndColumn,
+                FunctionName: functionName);
+
+            _logger.LogDebug(
+                "Found source location {File}:{Line}:{Column} for IL offset {Offset} in method {Function}",
+                documentPath, sp2.StartLine, sp2.StartColumn, ilOffset, functionName);
+
+            return Task.FromResult<SourceLocationResult?>(result);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Failed to find source location for method {Token:X8} at IL {Offset}",
+                methodToken, ilOffset);
+            return Task.FromResult<SourceLocationResult?>(null);
+        }
+    }
+
+    /// <inheritdoc />
+    public Task<bool> ContainsSourceFileAsync(
+        string assemblyPath,
+        string sourceFile,
+        CancellationToken cancellationToken = default)
+    {
+        var reader = _cache.GetOrCreateReader(assemblyPath);
+        if (reader == null)
+        {
+            return Task.FromResult(false);
+        }
+
+        var normalizedSourceFile = NormalizePath(sourceFile);
+        var documentHandle = FindDocument(reader, normalizedSourceFile);
+        return Task.FromResult(!documentHandle.IsNil);
+    }
+
     private static string NormalizePath(string path)
     {
         // Normalize path separators and resolve relative paths

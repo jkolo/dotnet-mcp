@@ -1,17 +1,58 @@
-// Simple test target for debugger attach/launch tests
+// Test target for debugger attach/launch and breakpoint tests
+using TestTargetApp;
+
 Console.WriteLine($"TestTargetApp started. PID: {Environment.ProcessId}");
 Console.WriteLine("READY");
 Console.Out.Flush();
 
-// Wait for termination signal or timeout
-var cts = new CancellationTokenSource(TimeSpan.FromMinutes(5));
-try
+// Command loop for test orchestration
+while (true)
 {
-    await Task.Delay(Timeout.Infinite, cts.Token);
-}
-catch (OperationCanceledException)
-{
-    // Normal exit
+    var command = Console.ReadLine();
+    if (string.IsNullOrEmpty(command) || command == "exit")
+        break;
+
+    switch (command)
+    {
+        case "loop":
+            // Run a simple loop - breakpoints can be set on LoopTarget.RunLoop
+            LoopTarget.RunLoop(5);
+            Console.WriteLine("LOOP_DONE");
+            Console.Out.Flush();
+            break;
+
+        case "method":
+            // Call a method - breakpoints can be set on MethodTarget.SayHello
+            var result = MethodTarget.SayHello("World");
+            Console.WriteLine($"METHOD_RESULT:{result}");
+            Console.Out.Flush();
+            break;
+
+        case "exception":
+            // Throw an exception - for exception breakpoint testing
+            try
+            {
+                ExceptionTarget.ThrowException();
+            }
+            catch (InvalidOperationException ex)
+            {
+                Console.WriteLine($"EXCEPTION_CAUGHT:{ex.Message}");
+                Console.Out.Flush();
+            }
+            break;
+
+        case "nested":
+            // Call nested methods - for stack trace testing
+            NestedTarget.Level1();
+            Console.WriteLine("NESTED_DONE");
+            Console.Out.Flush();
+            break;
+
+        default:
+            Console.WriteLine($"UNKNOWN_COMMAND:{command}");
+            Console.Out.Flush();
+            break;
+    }
 }
 
 Console.WriteLine("TestTargetApp exiting.");

@@ -53,4 +53,38 @@ public interface IDebugSessionManager
     /// <param name="terminateProcess">Whether to terminate the process (only for launched processes).</param>
     /// <param name="cancellationToken">Cancellation token.</param>
     Task DisconnectAsync(bool terminateProcess = false, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Continues execution of the paused process.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The updated debug session.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when no session is active or process is not paused.</exception>
+    Task<DebugSession> ContinueAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Steps through code in the specified mode.
+    /// </summary>
+    /// <param name="mode">The stepping mode (In, Over, Out).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The updated debug session.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when no session is active or process is not paused.</exception>
+    Task<DebugSession> StepAsync(StepMode mode, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Waits for a step operation to complete.
+    /// </summary>
+    /// <param name="timeout">Maximum time to wait for step completion.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Step completion info, or null if timeout occurred.</returns>
+    Task<StepCompleteEventArgs?> WaitForStepCompleteAsync(TimeSpan timeout, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Waits for the session to reach a specific state.
+    /// </summary>
+    /// <param name="targetState">The state to wait for.</param>
+    /// <param name="timeout">Maximum time to wait.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>True if state was reached, false if timeout occurred.</returns>
+    Task<bool> WaitForStateAsync(SessionState targetState, TimeSpan timeout, CancellationToken cancellationToken = default);
 }

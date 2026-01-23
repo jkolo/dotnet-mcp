@@ -13,6 +13,31 @@ public interface IProcessDebugger
     event EventHandler<SessionStateChangedEventArgs>? StateChanged;
 
     /// <summary>
+    /// Event raised when a breakpoint is hit.
+    /// </summary>
+    event EventHandler<BreakpointHitEventArgs>? BreakpointHit;
+
+    /// <summary>
+    /// Event raised when a module is loaded.
+    /// </summary>
+    event EventHandler<ModuleLoadedEventArgs>? ModuleLoaded;
+
+    /// <summary>
+    /// Event raised when a module is unloaded.
+    /// </summary>
+    event EventHandler<ModuleUnloadedEventArgs>? ModuleUnloaded;
+
+    /// <summary>
+    /// Event raised when a step operation completes.
+    /// </summary>
+    event EventHandler<StepCompleteEventArgs>? StepCompleted;
+
+    /// <summary>
+    /// Event raised when an exception is thrown (first-chance or unhandled).
+    /// </summary>
+    event EventHandler<ExceptionHitEventArgs>? ExceptionHit;
+
+    /// <summary>
     /// Gets whether a debug session is active.
     /// </summary>
     bool IsAttached { get; }
@@ -91,6 +116,45 @@ public interface IProcessDebugger
     /// </summary>
     /// <param name="cancellationToken">Cancellation token.</param>
     Task TerminateAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Enumerates all currently loaded modules in the debuggee.
+    /// </summary>
+    /// <returns>List of loaded modules.</returns>
+    IReadOnlyList<LoadedModuleInfo> GetLoadedModules();
+
+    /// <summary>
+    /// Continues execution of the paused debuggee.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <exception cref="InvalidOperationException">Thrown when not attached or not paused.</exception>
+    Task ContinueAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Steps through code in the specified mode.
+    /// </summary>
+    /// <param name="mode">The stepping mode (In, Over, Out).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <exception cref="InvalidOperationException">Thrown when not attached or not paused.</exception>
+    Task StepAsync(StepMode mode, CancellationToken cancellationToken = default);
+}
+
+/// <summary>
+/// Information about a loaded module.
+/// </summary>
+public sealed class LoadedModuleInfo
+{
+    /// <summary>Path to the module file.</summary>
+    public required string ModulePath { get; init; }
+
+    /// <summary>Whether the module is dynamic.</summary>
+    public required bool IsDynamic { get; init; }
+
+    /// <summary>Whether the module is in-memory.</summary>
+    public required bool IsInMemory { get; init; }
+
+    /// <summary>The native ICorDebugModule handle.</summary>
+    public required object NativeModule { get; init; }
 }
 
 /// <summary>
@@ -112,4 +176,127 @@ public sealed class SessionStateChangedEventArgs : EventArgs
 
     /// <summary>The active thread ID (if NewState is Paused).</summary>
     public int? ThreadId { get; init; }
+}
+
+/// <summary>
+/// Event args for breakpoint hit events.
+/// </summary>
+public sealed class BreakpointHitEventArgs : EventArgs
+{
+    /// <summary>The thread that hit the breakpoint.</summary>
+    public required int ThreadId { get; init; }
+
+    /// <summary>The source location where breakpoint was hit (may be partial without PDB).</summary>
+    public required SourceLocation? Location { get; init; }
+
+    /// <summary>Timestamp of the hit.</summary>
+    public required DateTime Timestamp { get; init; }
+
+    /// <summary>Metadata token of the method where breakpoint was hit.</summary>
+    public int? MethodToken { get; init; }
+
+    /// <summary>IL offset within the method.</summary>
+    public int? ILOffset { get; init; }
+
+    /// <summary>Path to the module (assembly) containing the breakpoint.</summary>
+    public string? ModulePath { get; init; }
+}
+
+/// <summary>
+/// Event args for module loaded events.
+/// </summary>
+public sealed class ModuleLoadedEventArgs : EventArgs
+{
+    /// <summary>Path to the loaded module (assembly).</summary>
+    public required string ModulePath { get; init; }
+
+    /// <summary>Base address of the module in memory.</summary>
+    public required ulong BaseAddress { get; init; }
+
+    /// <summary>Size of the module in bytes.</summary>
+    public required uint Size { get; init; }
+
+    /// <summary>Whether the module is dynamic (e.g., Reflection.Emit).</summary>
+    public required bool IsDynamic { get; init; }
+
+    /// <summary>Whether the module is in-memory (no file on disk).</summary>
+    public required bool IsInMemory { get; init; }
+
+    /// <summary>The native ICorDebugModule handle for breakpoint binding.</summary>
+    public required object NativeModule { get; init; }
+}
+
+/// <summary>
+/// Event args for module unloaded events.
+/// </summary>
+public sealed class ModuleUnloadedEventArgs : EventArgs
+{
+    /// <summary>Path to the unloaded module (assembly).</summary>
+    public required string ModulePath { get; init; }
+}
+
+/// <summary>
+/// Event args for step complete events.
+/// </summary>
+public sealed class StepCompleteEventArgs : EventArgs
+{
+    /// <summary>The thread that completed the step.</summary>
+    public required int ThreadId { get; init; }
+
+    /// <summary>The source location after the step (may be null without PDB).</summary>
+    public required SourceLocation? Location { get; init; }
+
+    /// <summary>The step mode that was executed.</summary>
+    public required StepMode StepMode { get; init; }
+
+    /// <summary>The reason the step completed (normal, breakpoint, exception, etc.).</summary>
+    public required StepCompleteReason Reason { get; init; }
+
+    /// <summary>Timestamp when step completed.</summary>
+    public required DateTime Timestamp { get; init; }
+}
+
+/// <summary>
+/// Reason why a step operation completed.
+/// </summary>
+public enum StepCompleteReason
+{
+    /// <summary>Step completed normally at the next instruction.</summary>
+    Normal,
+
+    /// <summary>Step completed because a breakpoint was hit.</summary>
+    Breakpoint,
+
+    /// <summary>Step completed because an exception was thrown.</summary>
+    Exception,
+
+    /// <summary>Step was interrupted/cancelled.</summary>
+    Interrupted
+}
+
+/// <summary>
+/// Event args for exception hit events.
+/// </summary>
+public sealed class ExceptionHitEventArgs : EventArgs
+{
+    /// <summary>The thread that threw the exception.</summary>
+    public required int ThreadId { get; init; }
+
+    /// <summary>The source location where exception was thrown.</summary>
+    public required SourceLocation? Location { get; init; }
+
+    /// <summary>Timestamp when exception was thrown.</summary>
+    public required DateTime Timestamp { get; init; }
+
+    /// <summary>Full type name of the exception (e.g., System.NullReferenceException).</summary>
+    public required string ExceptionType { get; init; }
+
+    /// <summary>Exception message (may be empty if extraction failed).</summary>
+    public required string ExceptionMessage { get; init; }
+
+    /// <summary>True if first-chance exception, false if unhandled.</summary>
+    public required bool IsFirstChance { get; init; }
+
+    /// <summary>True if the exception is unhandled.</summary>
+    public required bool IsUnhandled { get; init; }
 }

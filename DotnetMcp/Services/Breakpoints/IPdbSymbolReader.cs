@@ -50,6 +50,33 @@ public interface IPdbSymbolReader
         int line,
         int searchRange = 10,
         CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Finds the source location for a given IL offset in a method.
+    /// Used for reverse mapping from IL to source when breakpoint is hit.
+    /// </summary>
+    /// <param name="assemblyPath">Path to the assembly (DLL or EXE).</param>
+    /// <param name="methodToken">Metadata token of the method.</param>
+    /// <param name="ilOffset">IL offset within the method.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Source location if found, null if no mapping available.</returns>
+    Task<SourceLocationResult?> FindSourceLocationAsync(
+        string assemblyPath,
+        int methodToken,
+        int ilOffset,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Checks if a source file is contained in the module's PDB.
+    /// </summary>
+    /// <param name="assemblyPath">Path to the assembly (DLL or EXE).</param>
+    /// <param name="sourceFile">Absolute path to source file.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>True if the source file is in the module's PDB.</returns>
+    Task<bool> ContainsSourceFileAsync(
+        string assemblyPath,
+        string sourceFile,
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>
@@ -85,3 +112,20 @@ public record SequencePointInfo(
     int EndLine,
     int EndColumn,
     bool IsHidden);
+
+/// <summary>
+/// Result of source location lookup from IL offset.
+/// </summary>
+/// <param name="FilePath">Absolute path to the source file.</param>
+/// <param name="Line">1-based line number.</param>
+/// <param name="Column">1-based column number.</param>
+/// <param name="EndLine">1-based end line number.</param>
+/// <param name="EndColumn">1-based end column number.</param>
+/// <param name="FunctionName">Name of the containing function (if available).</param>
+public record SourceLocationResult(
+    string FilePath,
+    int Line,
+    int Column,
+    int EndLine,
+    int EndColumn,
+    string? FunctionName);

@@ -77,4 +77,15 @@ public static class ErrorCodes
 
     /// <summary>Condition evaluation failed at runtime.</summary>
     public const string EvalFailed = "EVAL_FAILED";
+
+    // Execution control error codes
+
+    /// <summary>Process is not paused (required for continue/step).</summary>
+    public const string NotPaused = "NOT_PAUSED";
+
+    /// <summary>Invalid parameter value.</summary>
+    public const string InvalidParameter = "INVALID_PARAMETER";
+
+    /// <summary>Step operation failed.</summary>
+    public const string StepFailed = "STEP_FAILED";
 }

@@ -14,6 +14,14 @@ public sealed class DebugSessionManager : IDebugSessionManager
     private DebugSession? _currentSession;
     private readonly object _lock = new();
 
+    // Step completion signaling
+    private readonly SemaphoreSlim _stepCompleteSemaphore = new(0);
+    private readonly System.Collections.Concurrent.ConcurrentQueue<StepCompleteEventArgs> _stepCompleteQueue = new();
+
+    // State waiting signaling
+    private readonly SemaphoreSlim _stateChangeSemaphore = new(0);
+    private SessionState? _awaitedState;
+
     public DebugSessionManager(IProcessDebugger processDebugger, ILogger<DebugSessionManager> logger)
     {
         _processDebugger = processDebugger;
@@ -21,6 +29,7 @@ public sealed class DebugSessionManager : IDebugSessionManager
 
         // Subscribe to state changes from the process debugger
         _processDebugger.StateChanged += OnStateChanged;
+        _processDebugger.StepCompleted += OnStepCompleted;
     }
 
     /// <inheritdoc />
@@ -159,6 +168,140 @@ public sealed class DebugSessionManager : IDebugSessionManager
         _logger.DisconnectedFromProcess(session.ProcessId);
     }
 
+    /// <inheritdoc />
+    public async Task<DebugSession> ContinueAsync(CancellationToken cancellationToken = default)
+    {
+        DebugSession session;
+        lock (_lock)
+        {
+            if (_currentSession == null)
+            {
+                throw new InvalidOperationException("No active debug session");
+            }
+
+            if (_currentSession.State != SessionState.Paused)
+            {
+                throw new InvalidOperationException($"Process is not paused (current state: {_currentSession.State})");
+            }
+
+            session = _currentSession;
+        }
+
+        _logger.LogInformation("Continuing execution for process {ProcessId}", session.ProcessId);
+
+        await _processDebugger.ContinueAsync(cancellationToken);
+
+        lock (_lock)
+        {
+            return _currentSession!;
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<DebugSession> StepAsync(StepMode mode, CancellationToken cancellationToken = default)
+    {
+        DebugSession session;
+        lock (_lock)
+        {
+            if (_currentSession == null)
+            {
+                throw new InvalidOperationException("No active debug session");
+            }
+
+            if (_currentSession.State != SessionState.Paused)
+            {
+                throw new InvalidOperationException($"Process is not paused (current state: {_currentSession.State})");
+            }
+
+            session = _currentSession;
+        }
+
+        _logger.LogInformation("Stepping {Mode} for process {ProcessId}", mode, session.ProcessId);
+
+        // Initiate the step
+        await _processDebugger.StepAsync(mode, cancellationToken);
+
+        // Wait for step to complete (state returns to Paused)
+        var stepComplete = await WaitForStepCompleteAsync(TimeSpan.FromSeconds(30), cancellationToken);
+        if (stepComplete == null)
+        {
+            _logger.LogWarning("Step operation timed out waiting for completion");
+        }
+
+        lock (_lock)
+        {
+            return _currentSession!;
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<StepCompleteEventArgs?> WaitForStepCompleteAsync(TimeSpan timeout, CancellationToken cancellationToken = default)
+    {
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutCts.CancelAfter(timeout);
+
+        try
+        {
+            await _stepCompleteSemaphore.WaitAsync(timeoutCts.Token);
+
+            if (_stepCompleteQueue.TryDequeue(out var result))
+            {
+                return result;
+            }
+
+            return null;
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            // Timeout occurred
+            return null;
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<bool> WaitForStateAsync(SessionState targetState, TimeSpan timeout, CancellationToken cancellationToken = default)
+    {
+        // Check if already in target state
+        lock (_lock)
+        {
+            if (_currentSession?.State == targetState)
+            {
+                return true;
+            }
+            _awaitedState = targetState;
+        }
+
+        using var timeoutCts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
+        timeoutCts.CancelAfter(timeout);
+
+        try
+        {
+            while (!timeoutCts.Token.IsCancellationRequested)
+            {
+                await _stateChangeSemaphore.WaitAsync(timeoutCts.Token);
+
+                lock (_lock)
+                {
+                    if (_currentSession?.State == targetState)
+                    {
+                        _awaitedState = null;
+                        return true;
+                    }
+                }
+            }
+        }
+        catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
+        {
+            // Timeout occurred
+        }
+
+        lock (_lock)
+        {
+            _awaitedState = null;
+        }
+        return false;
+    }
+
     private void OnStateChanged(object? sender, SessionStateChangedEventArgs e)
     {
         lock (_lock)
@@ -180,6 +323,21 @@ public sealed class DebugSessionManager : IDebugSessionManager
                     e.PauseReason?.ToString() ?? "Unknown",
                     e.ThreadId ?? 0);
             }
+
+            // Signal state waiters if target state reached
+            if (_awaitedState.HasValue && e.NewState == _awaitedState.Value)
+            {
+                _stateChangeSemaphore.Release();
+            }
         }
+    }
+
+    private void OnStepCompleted(object? sender, StepCompleteEventArgs e)
+    {
+        _stepCompleteQueue.Enqueue(e);
+        _stepCompleteSemaphore.Release();
+
+        _logger.LogDebug("Step completed: thread={ThreadId}, mode={Mode}, reason={Reason}",
+            e.ThreadId, e.StepMode, e.Reason);
     }
 }
