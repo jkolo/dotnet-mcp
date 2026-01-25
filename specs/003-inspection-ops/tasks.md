@@ -20,9 +20,9 @@
 
 **Purpose**: Create inspection infrastructure directories and base structure
 
-- [ ] T001 Create DotnetMcp/Models/Inspection/ directory for inspection models
-- [ ] T002 [P] Create DotnetMcp/Services/Inspection/ directory for inspection services
-- [ ] T003 [P] Add DI registration for inspection services in DotnetMcp/Program.cs
+- [X] T001 Create DotnetMcp/Models/Inspection/ directory for inspection models
+- [X] T002 [P] Create DotnetMcp/Services/Inspection/ directory for inspection services
+- [X] T003 [P] Add DI registration for inspection services in DotnetMcp/Program.cs
 
 ---
 
@@ -34,16 +34,16 @@
 
 ### Shared Models
 
-- [ ] T004 Create VariableScope enum in DotnetMcp/Models/Inspection/VariableScope.cs
-- [ ] T005 [P] Create Variable record in DotnetMcp/Models/Inspection/Variable.cs
-- [ ] T006 [P] Create EvaluationError record in DotnetMcp/Models/Inspection/EvaluationError.cs
+- [X] T004 Create VariableScope enum in DotnetMcp/Models/Inspection/VariableScope.cs
+- [X] T005 [P] Create Variable record in DotnetMcp/Models/Inspection/Variable.cs
+- [X] T006 [P] Create EvaluationError record in DotnetMcp/Models/Inspection/EvaluationError.cs
 
 ### ProcessDebugger Extensions
 
-- [ ] T007 Add GetThreads() method signature to DotnetMcp/Services/IProcessDebugger.cs
-- [ ] T008 [P] Add GetStackFrames() method signature to DotnetMcp/Services/IProcessDebugger.cs
-- [ ] T009 [P] Add GetVariables() method signature to DotnetMcp/Services/IProcessDebugger.cs
-- [ ] T010 [P] Add Pause() method signature to DotnetMcp/Services/IProcessDebugger.cs
+- [X] T007 Add GetThreads() method signature to DotnetMcp/Services/IProcessDebugger.cs
+- [X] T008 [P] Add GetStackFrames() method signature to DotnetMcp/Services/IProcessDebugger.cs
+- [X] T009 [P] Add GetVariables() method signature to DotnetMcp/Services/IProcessDebugger.cs
+- [X] T010 [P] Add Pause() method signature to DotnetMcp/Services/IProcessDebugger.cs
 
 **Checkpoint**: Foundation ready - user story implementation can begin
 
@@ -59,22 +59,22 @@
 
 > **NOTE: Write tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T011 [P] [US1] Contract test for stacktrace_get schema in tests/DotnetMcp.Tests/Contract/StacktraceGetContractTests.cs
-- [ ] T012 [P] [US1] Unit test for StackWalker in tests/DotnetMcp.Tests/Unit/StackWalkerTests.cs
-- [ ] T013 [US1] Integration test for stack trace workflow in tests/DotnetMcp.Tests/Integration/StackInspectionTests.cs
+- [X] T011 [P] [US1] Contract test for stacktrace_get schema in tests/DotnetMcp.Tests/Contract/StacktraceGetContractTests.cs
+- [X] T012 [P] [US1] Unit test for GetStackFrames in tests/DotnetMcp.Tests/Unit/ProcessDebuggerTests.cs
+- [X] T013 [US1] Integration test for stack trace workflow in tests/DotnetMcp.Tests/Integration/StackInspectionTests.cs
 
 ### Implementation for User Story 1
 
-- [ ] T014 [P] [US1] Create StackFrame record in DotnetMcp/Models/Inspection/StackFrame.cs
-- [ ] T015 [US1] Create IStackWalker interface in DotnetMcp/Services/Inspection/IStackWalker.cs
-- [ ] T016 [US1] Implement StackWalker.GetFrames() using ICorDebugThread chains in DotnetMcp/Services/Inspection/StackWalker.cs
-- [ ] T017 [US1] Implement frame IL offset to source location mapping using PdbSymbolReader
-- [ ] T018 [US1] Implement pagination support (start_frame, max_frames) in StackWalker
-- [ ] T019 [US1] Implement external frame detection (is_external flag for framework code)
-- [ ] T020 [US1] Create stacktrace_get MCP tool in DotnetMcp/Tools/StacktraceGetTool.cs
-- [ ] T021 [US1] Add INVALID_THREAD error handling in stacktrace_get
-- [ ] T022 [US1] Add NOT_PAUSED error handling in stacktrace_get
-- [ ] T023 [US1] Add logging for stack trace operations in StacktraceGetTool
+- [X] T014 [P] [US1] Create StackFrame record in DotnetMcp/Models/Inspection/StackFrame.cs
+- [X] T015 [US1] Create IStackWalker interface in DotnetMcp/Services/Inspection/IStackWalker.cs (implemented directly in IProcessDebugger)
+- [X] T016 [US1] Implement StackWalker.GetFrames() using ICorDebugThread chains in DotnetMcp/Services/Inspection/StackWalker.cs (implemented in ProcessDebugger)
+- [X] T017 [US1] Implement frame IL offset to source location mapping using PdbSymbolReader
+- [X] T018 [US1] Implement pagination support (start_frame, max_frames) in StackWalker
+- [X] T019 [US1] Implement external frame detection (is_external flag for framework code)
+- [X] T020 [US1] Create stacktrace_get MCP tool in DotnetMcp/Tools/StacktraceGetTool.cs
+- [X] T021 [US1] Add INVALID_THREAD error handling in stacktrace_get
+- [X] T022 [US1] Add NOT_PAUSED error handling in stacktrace_get
+- [X] T023 [US1] Add logging for stack trace operations in StacktraceGetTool
 
 **Checkpoint**: User Story 1 complete - can get stack traces when paused
 
@@ -88,26 +88,26 @@
 
 ### Tests for User Story 2
 
-- [ ] T024 [P] [US2] Contract test for variables_get schema in tests/DotnetMcp.Tests/Contract/VariablesGetContractTests.cs
-- [ ] T025 [P] [US2] Unit test for VariableInspector in tests/DotnetMcp.Tests/Unit/VariableInspectorTests.cs
-- [ ] T026 [US2] Integration test for variable inspection in tests/DotnetMcp.Tests/Integration/VariableInspectionTests.cs
+- [X] T024 [P] [US2] Contract test for variables_get schema in tests/DotnetMcp.Tests/Contract/VariablesGetContractTests.cs
+- [X] T025 [P] [US2] Unit test for GetVariables in tests/DotnetMcp.Tests/Unit/ProcessDebuggerTests.cs
+- [X] T026 [US2] Integration test for variable inspection in tests/DotnetMcp.Tests/Integration/VariableInspectionTests.cs
 
 ### Implementation for User Story 2
 
-- [ ] T027 [US2] Create IVariableInspector interface in DotnetMcp/Services/Inspection/IVariableInspector.cs
-- [ ] T028 [US2] Implement VariableInspector.GetLocals() using ICorDebugILFrame in DotnetMcp/Services/Inspection/VariableInspector.cs
-- [ ] T029 [US2] Implement VariableInspector.GetArguments() using ICorDebugILFrame
-- [ ] T030 [US2] Implement VariableInspector.GetThis() for instance methods
-- [ ] T031 [US2] Implement ICorDebugValue to display string formatting (ValueFormatter)
-- [ ] T032 [US2] Implement object expansion (GetFieldValue for complex types)
-- [ ] T033 [US2] Implement array/collection expansion (GetElement for arrays)
-- [ ] T034 [US2] Implement circular reference detection during expansion
-- [ ] T035 [US2] Implement scoped retrieval (locals only, arguments only, this only, all)
-- [ ] T036 [US2] Implement truncation for large values (strings >100 chars, arrays >100 elements)
-- [ ] T037 [US2] Create variables_get MCP tool in DotnetMcp/Tools/VariablesGetTool.cs
-- [ ] T038 [US2] Add INVALID_FRAME error handling in variables_get
-- [ ] T039 [US2] Add VARIABLE_UNAVAILABLE handling for optimized code
-- [ ] T040 [US2] Add logging for variable inspection operations
+- [X] T027 [US2] Create IVariableInspector interface (implemented directly in ProcessDebugger per Simplicity principle)
+- [X] T028 [US2] Implement GetLocals() using ICorDebugILFrame in ProcessDebugger.cs
+- [X] T029 [US2] Implement GetArguments() using ICorDebugILFrame in ProcessDebugger.cs
+- [X] T030 [US2] Implement GetThisReference() for instance methods in ProcessDebugger.cs
+- [X] T031 [US2] Implement ICorDebugValue to display string formatting (FormatValue in ProcessDebugger.cs)
+- [X] T032 [US2] Implement object expansion (TryGetFieldValue for complex types)
+- [X] T033 [US2] Implement array/collection expansion (FormatValue handles arrays)
+- [X] T034 [US2] Implement circular reference detection during expansion
+- [X] T035 [US2] Implement scoped retrieval (locals only, arguments only, this only, all)
+- [X] T036 [US2] Implement truncation for large values (strings >100 chars, arrays >100 elements)
+- [X] T037 [US2] Create variables_get MCP tool in DotnetMcp/Tools/VariablesGetTool.cs
+- [X] T038 [US2] Add INVALID_FRAME error handling in variables_get
+- [X] T039 [US2] Add VARIABLE_UNAVAILABLE handling for optimized code
+- [X] T040 [US2] Add logging for variable inspection operations
 
 **Checkpoint**: User Stories 1 AND 2 complete - can get stacks and variables
 
@@ -121,23 +121,23 @@
 
 ### Tests for User Story 3
 
-- [ ] T041 [P] [US3] Contract test for threads_list schema in tests/DotnetMcp.Tests/Contract/ThreadsListContractTests.cs
-- [ ] T042 [P] [US3] Unit test for ThreadInspector in tests/DotnetMcp.Tests/Unit/ThreadInspectorTests.cs
-- [ ] T043 [US3] Integration test for thread listing in tests/DotnetMcp.Tests/Integration/ThreadInspectionTests.cs
+- [X] T041 [P] [US3] Contract test for threads_list schema in tests/DotnetMcp.Tests/Contract/ThreadsListContractTests.cs
+- [X] T042 [P] [US3] Unit test for GetThreads in tests/DotnetMcp.Tests/Unit/ProcessDebuggerTests.cs
+- [X] T043 [US3] Integration test for thread listing in tests/DotnetMcp.Tests/Integration/ThreadInspectionTests.cs
 
 ### Implementation for User Story 3
 
-- [ ] T044 [P] [US3] Create ThreadState enum in DotnetMcp/Models/Inspection/ThreadState.cs
-- [ ] T045 [P] [US3] Create ThreadInfo record in DotnetMcp/Models/Inspection/ThreadInfo.cs
-- [ ] T046 [US3] Create IThreadInspector interface in DotnetMcp/Services/Inspection/IThreadInspector.cs
-- [ ] T047 [US3] Implement ThreadInspector.GetThreads() using ICorDebugProcess.Threads in DotnetMcp/Services/Inspection/ThreadInspector.cs
-- [ ] T048 [US3] Implement thread state mapping from CorDebugUserState to ThreadState enum
-- [ ] T049 [US3] Implement thread name resolution via Thread.Name property (requires ICorDebugValue)
-- [ ] T050 [US3] Implement current thread detection (is_current flag)
-- [ ] T051 [US3] Implement thread location extraction for stopped threads
-- [ ] T052 [US3] Create threads_list MCP tool in DotnetMcp/Tools/ThreadsListTool.cs
-- [ ] T053 [US3] Add NOT_ATTACHED error handling in threads_list
-- [ ] T054 [US3] Add logging for thread listing operations
+- [X] T044 [P] [US3] Create ThreadState enum in DotnetMcp/Models/Inspection/ThreadState.cs
+- [X] T045 [P] [US3] Create ThreadInfo record in DotnetMcp/Models/Inspection/ThreadInfo.cs
+- [X] T046 [US3] Create IThreadInspector interface (implemented directly in ProcessDebugger per Simplicity principle)
+- [X] T047 [US3] Implement GetThreads() using ICorDebugProcess.Threads in ProcessDebugger.cs
+- [X] T048 [US3] Implement thread state mapping from CorDebugUserState to ThreadState enum (MapThreadState)
+- [X] T049 [US3] Implement thread name resolution via Thread.Name property (via direct _name field access)
+- [X] T050 [US3] Implement current thread detection (is_current flag)
+- [X] T051 [US3] Implement thread location extraction for stopped threads (GetLocationForThread)
+- [X] T052 [US3] Create threads_list MCP tool in DotnetMcp/Tools/ThreadsListTool.cs
+- [X] T053 [US3] Add NOT_ATTACHED error handling in threads_list
+- [X] T054 [US3] Add logging for thread listing operations
 
 **Checkpoint**: User Stories 1, 2, AND 3 complete - full basic inspection
 
@@ -151,26 +151,26 @@
 
 ### Tests for User Story 4
 
-- [ ] T055 [P] [US4] Contract test for evaluate schema in tests/DotnetMcp.Tests/Contract/EvaluateContractTests.cs
-- [ ] T056 [P] [US4] Unit test for ExpressionEvaluator in tests/DotnetMcp.Tests/Unit/ExpressionEvaluatorTests.cs
-- [ ] T057 [US4] Integration test for expression evaluation in tests/DotnetMcp.Tests/Integration/ExpressionEvaluationTests.cs
+- [X] T055 [P] [US4] Contract test for evaluate schema in tests/DotnetMcp.Tests/Contract/EvaluateContractTests.cs
+- [X] T056 [P] [US4] Unit test for EvaluateAsync in tests/DotnetMcp.Tests/Unit/ProcessDebuggerTests.cs
+- [X] T057 [US4] Integration test for expression evaluation in tests/DotnetMcp.Tests/Integration/ExpressionTests.cs
 
 ### Implementation for User Story 4
 
-- [ ] T058 [P] [US4] Create EvaluationResult record in DotnetMcp/Models/Inspection/EvaluationResult.cs
-- [ ] T059 [US4] Create IExpressionEvaluator interface in DotnetMcp/Services/Inspection/IExpressionEvaluator.cs
-- [ ] T060 [US4] Implement simple expression parser (tokenize variable.property.method patterns)
-- [ ] T061 [US4] Implement variable lookup from current frame locals/arguments
-- [ ] T062 [US4] Implement property getter calls via ICorDebugEval.CallFunction
-- [ ] T063 [US4] Implement method calls via ICorDebugEval.CallFunction
-- [ ] T064 [US4] Implement ICorDebugEval result handling (EvalComplete callback)
-- [ ] T065 [US4] Implement evaluation timeout handling via ICorDebugEval.Abort
-- [ ] T066 [US4] Implement exception handling for eval (EvalException callback)
-- [ ] T067 [US4] Create evaluate MCP tool in DotnetMcp/Tools/EvaluateTool.cs
-- [ ] T068 [US4] Add SYNTAX_ERROR handling for invalid expressions
-- [ ] T069 [US4] Add EVAL_TIMEOUT error response
-- [ ] T070 [US4] Add EVAL_EXCEPTION error response with exception details
-- [ ] T071 [US4] Add logging for expression evaluation operations
+- [X] T058 [P] [US4] Create EvaluationResult record in DotnetMcp/Models/Inspection/EvaluationResult.cs
+- [X] T059 [US4] Create IExpressionEvaluator interface (implemented directly in ProcessDebugger per Simplicity principle)
+- [X] T060 [US4] Implement simple expression parser (tokenize variable.property.method patterns)
+- [X] T061 [US4] Implement variable lookup from current frame locals/arguments
+- [X] T062 [US4] Implement property getter calls via ICorDebugEval.CallFunction
+- [X] T063 [US4] Implement method calls via ICorDebugEval.CallFunction
+- [X] T064 [US4] Implement ICorDebugEval result handling (EvalComplete callback)
+- [X] T065 [US4] Implement evaluation timeout handling via ICorDebugEval.Abort
+- [X] T066 [US4] Implement exception handling for eval (EvalException callback)
+- [X] T067 [US4] Create evaluate MCP tool in DotnetMcp/Tools/EvaluateTool.cs
+- [X] T068 [US4] Add SYNTAX_ERROR handling for invalid expressions
+- [X] T069 [US4] Add EVAL_TIMEOUT error response
+- [X] T070 [US4] Add EVAL_EXCEPTION error response with exception details
+- [X] T071 [US4] Add logging for expression evaluation operations
 
 **Checkpoint**: User Stories 1-4 complete - full inspection with evaluation
 
@@ -184,19 +184,19 @@
 
 ### Tests for User Story 5
 
-- [ ] T072 [P] [US5] Contract test for debug_pause schema in tests/DotnetMcp.Tests/Contract/DebugPauseContractTests.cs
-- [ ] T073 [US5] Integration test for pause workflow in tests/DotnetMcp.Tests/Integration/PauseTests.cs
+- [X] T072 [P] [US5] Contract test for debug_pause schema in tests/DotnetMcp.Tests/Contract/DebugPauseContractTests.cs
+- [X] T073 [US5] Integration test for pause workflow in tests/DotnetMcp.Tests/Integration/PauseTests.cs
 
 ### Implementation for User Story 5
 
-- [ ] T074 [US5] Implement ProcessDebugger.PauseAsync() using ICorDebugProcess.Stop in DotnetMcp/Services/ProcessDebugger.cs
-- [ ] T075 [US5] Handle already-paused case (idempotent - return success)
-- [ ] T076 [US5] Implement current thread selection after pause
-- [ ] T077 [US5] Update session state to Paused with reason "pause" after Stop()
-- [ ] T078 [US5] Create debug_pause MCP tool in DotnetMcp/Tools/DebugPauseTool.cs
-- [ ] T079 [US5] Add NOT_ATTACHED error handling in debug_pause
-- [ ] T080 [US5] Return thread summary with locations in pause response
-- [ ] T081 [US5] Add logging for pause operations
+- [X] T074 [US5] Implement ProcessDebugger.PauseAsync() using ICorDebugProcess.Stop in DotnetMcp/Services/ProcessDebugger.cs
+- [X] T075 [US5] Handle already-paused case (idempotent - return success)
+- [X] T076 [US5] Implement current thread selection after pause
+- [X] T077 [US5] Update session state to Paused with reason "pause" after Stop()
+- [X] T078 [US5] Create debug_pause MCP tool in DotnetMcp/Tools/DebugPauseTool.cs
+- [X] T079 [US5] Add NOT_ATTACHED error handling in debug_pause
+- [X] T080 [US5] Return thread summary with locations in pause response
+- [X] T081 [US5] Add logging for pause operations
 
 **Checkpoint**: All 5 user stories complete - full inspection functionality
 
@@ -206,12 +206,12 @@
 
 **Purpose**: Improvements affecting multiple user stories
 
-- [ ] T082 [P] Validate JSON schemas match contracts in tests/DotnetMcp.Tests/Contract/SchemaValidationTests.cs
-- [ ] T083 [P] Add performance tests for SC-001 (stack <500ms), SC-002 (vars <1s), SC-004 (threads <200ms)
-- [ ] T084 [P] Update docs/MCP_TOOLS.md with inspection tools documentation
-- [ ] T085 Run quickstart.md validation against implementation
-- [ ] T086 Code cleanup and XML documentation for all public APIs
-- [ ] T087 Verify multi-threaded application handling (correct thread state reporting)
+- [X] T082 [P] Validate JSON schemas match contracts in tests/DotnetMcp.Tests/Contract/SchemaValidationTests.cs
+- [X] T083 [P] Add performance tests for SC-001 (stack <500ms), SC-002 (vars <1s), SC-004 (threads <200ms)
+- [X] T084 [P] Update docs/MCP_TOOLS.md with inspection tools documentation
+- [X] T085 Run quickstart.md validation against implementation
+- [X] T086 Code cleanup and XML documentation for all public APIs
+- [X] T087 Verify multi-threaded application handling (correct thread state reporting)
 
 ---
 

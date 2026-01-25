@@ -340,4 +340,99 @@ public sealed class DebugSessionManager : IDebugSessionManager
         _logger.LogDebug("Step completed: thread={ThreadId}, mode={Mode}, reason={Reason}",
             e.ThreadId, e.StepMode, e.Reason);
     }
+
+    /// <inheritdoc />
+    public (IReadOnlyList<Models.Inspection.StackFrame> Frames, int TotalFrames) GetStackFrames(int? threadId = null, int startFrame = 0, int maxFrames = 20)
+    {
+        lock (_lock)
+        {
+            if (_currentSession == null)
+            {
+                throw new InvalidOperationException("No active debug session");
+            }
+
+            if (_currentSession.State != SessionState.Paused)
+            {
+                throw new InvalidOperationException($"Process is not paused (current state: {_currentSession.State})");
+            }
+        }
+
+        return _processDebugger.GetStackFrames(threadId, startFrame, maxFrames);
+    }
+
+    /// <inheritdoc />
+    public IReadOnlyList<Models.Inspection.ThreadInfo> GetThreads()
+    {
+        lock (_lock)
+        {
+            if (_currentSession == null)
+            {
+                throw new InvalidOperationException("No active debug session");
+            }
+        }
+
+        return _processDebugger.GetThreads();
+    }
+
+    /// <inheritdoc />
+    public IReadOnlyList<Models.Inspection.Variable> GetVariables(int? threadId = null, int frameIndex = 0, string scope = "all", string? expandPath = null)
+    {
+        lock (_lock)
+        {
+            if (_currentSession == null)
+            {
+                throw new InvalidOperationException("No active debug session");
+            }
+
+            if (_currentSession.State != SessionState.Paused)
+            {
+                throw new InvalidOperationException($"Process is not paused (current state: {_currentSession.State})");
+            }
+        }
+
+        return _processDebugger.GetVariables(threadId, frameIndex, scope, expandPath);
+    }
+
+    /// <inheritdoc />
+    public async Task<IReadOnlyList<Models.Inspection.ThreadInfo>> PauseAsync(CancellationToken cancellationToken = default)
+    {
+        DebugSession session;
+        lock (_lock)
+        {
+            if (_currentSession == null)
+            {
+                throw new InvalidOperationException("No active debug session");
+            }
+
+            session = _currentSession;
+        }
+
+        _logger.LogInformation("Pausing process {ProcessId}", session.ProcessId);
+
+        return await _processDebugger.PauseAsync(cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task<Models.Inspection.EvaluationResult> EvaluateAsync(
+        string expression,
+        int? threadId = null,
+        int frameIndex = 0,
+        int timeoutMs = 5000,
+        CancellationToken cancellationToken = default)
+    {
+        lock (_lock)
+        {
+            if (_currentSession == null)
+            {
+                throw new InvalidOperationException("No active debug session");
+            }
+
+            if (_currentSession.State != SessionState.Paused)
+            {
+                throw new InvalidOperationException($"Process is not paused (current state: {_currentSession.State})");
+            }
+        }
+
+        return await _processDebugger.EvaluateAsync(expression, threadId, frameIndex, timeoutMs, cancellationToken);
+    }
 }

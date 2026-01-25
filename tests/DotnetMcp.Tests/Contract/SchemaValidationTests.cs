@@ -1,7 +1,9 @@
 using System.Text.Json;
 using DotnetMcp.Models;
 using DotnetMcp.Models.Breakpoints;
+using DotnetMcp.Models.Inspection;
 using FluentAssertions;
+using ThreadState = DotnetMcp.Models.Inspection.ThreadState;
 
 namespace DotnetMcp.Tests.Contract;
 
@@ -526,6 +528,216 @@ public class SchemaValidationTests
             ErrorCodes.InvalidLine,
             ErrorCodes.InvalidColumn,
             ErrorCodes.InvalidCondition
+        };
+
+        foreach (var code in codes)
+        {
+            code.Should().NotBeNullOrEmpty();
+            code.Should().MatchRegex(@"^[A-Z_]+$", $"Error code '{code}' should be SCREAMING_SNAKE_CASE");
+        }
+    }
+
+    // ========== Inspection Schema Validation ==========
+
+    /// <summary>
+    /// StackFrame serializes all required fields.
+    /// </summary>
+    [Fact]
+    public void StackFrame_Serializes_RequiredFields()
+    {
+        // Contract requires: index, function, module, is_external
+        var frame = new StackFrame(
+            Index: 0,
+            Function: "Program.Main",
+            Module: "TestApp.dll",
+            IsExternal: false,
+            Location: new SourceLocation("/path/to/Program.cs", 42, null, "Main", null),
+            Arguments: null
+        );
+
+        var json = JsonSerializer.Serialize(frame, JsonOptions);
+        var doc = JsonDocument.Parse(json);
+        var root = doc.RootElement;
+
+        root.TryGetProperty("index", out var index).Should().BeTrue();
+        index.GetInt32().Should().Be(0);
+
+        root.TryGetProperty("function", out var func).Should().BeTrue();
+        func.GetString().Should().Be("Program.Main");
+
+        root.TryGetProperty("module", out var module).Should().BeTrue();
+        module.GetString().Should().Be("TestApp.dll");
+
+        root.TryGetProperty("isExternal", out var isExternal).Should().BeTrue();
+        isExternal.GetBoolean().Should().BeFalse();
+    }
+
+    /// <summary>
+    /// ThreadState enum values match contract.
+    /// </summary>
+    [Theory]
+    [InlineData(ThreadState.Running, "running")]
+    [InlineData(ThreadState.Stopped, "stopped")]
+    [InlineData(ThreadState.Waiting, "waiting")]
+    [InlineData(ThreadState.NotStarted, "notstarted")]
+    [InlineData(ThreadState.Terminated, "terminated")]
+    public void ThreadState_Serializes_ToLowercaseStrings(ThreadState state, string expected)
+    {
+        // Contract expects lowercase
+        var lowered = state.ToString().ToLowerInvariant();
+        lowered.Should().Be(expected);
+    }
+
+    /// <summary>
+    /// ThreadInfo serializes all required fields.
+    /// </summary>
+    [Fact]
+    public void ThreadInfo_Serializes_RequiredFields()
+    {
+        // Contract requires: id, state, is_current
+        var thread = new ThreadInfo(
+            Id: 1234,
+            Name: "Main Thread",
+            State: ThreadState.Running,
+            IsCurrent: true,
+            Location: new SourceLocation("/path/to/source.cs", 10, null, null, null)
+        );
+
+        var json = JsonSerializer.Serialize(thread, JsonOptions);
+        var doc = JsonDocument.Parse(json);
+        var root = doc.RootElement;
+
+        root.TryGetProperty("id", out var id).Should().BeTrue();
+        id.GetInt32().Should().Be(1234);
+
+        root.TryGetProperty("name", out var name).Should().BeTrue();
+        name.GetString().Should().Be("Main Thread");
+
+        root.TryGetProperty("isCurrent", out var isCurrent).Should().BeTrue();
+        isCurrent.GetBoolean().Should().BeTrue();
+    }
+
+    /// <summary>
+    /// Variable serializes all required fields.
+    /// </summary>
+    [Fact]
+    public void Variable_Serializes_RequiredFields()
+    {
+        // Contract requires: name, type, value, scope, has_children
+        var variable = new Variable(
+            Name: "counter",
+            Type: "System.Int32",
+            Value: "42",
+            Scope: VariableScope.Local,
+            HasChildren: false,
+            ChildrenCount: null,
+            Path: null
+        );
+
+        var json = JsonSerializer.Serialize(variable, JsonOptions);
+        var doc = JsonDocument.Parse(json);
+        var root = doc.RootElement;
+
+        root.TryGetProperty("name", out var name).Should().BeTrue();
+        name.GetString().Should().Be("counter");
+
+        root.TryGetProperty("type", out var type).Should().BeTrue();
+        type.GetString().Should().Be("System.Int32");
+
+        root.TryGetProperty("value", out var value).Should().BeTrue();
+        value.GetString().Should().Be("42");
+
+        root.TryGetProperty("hasChildren", out var hasChildren).Should().BeTrue();
+        hasChildren.GetBoolean().Should().BeFalse();
+    }
+
+    /// <summary>
+    /// VariableScope enum values match contract.
+    /// </summary>
+    [Theory]
+    [InlineData(VariableScope.Local, "local")]
+    [InlineData(VariableScope.Argument, "argument")]
+    [InlineData(VariableScope.This, "this")]
+    public void VariableScope_Serializes_ToLowercaseStrings(VariableScope scope, string expected)
+    {
+        // Contract expects lowercase
+        var lowered = scope.ToString().ToLowerInvariant();
+        lowered.Should().Be(expected);
+    }
+
+    /// <summary>
+    /// EvaluationResult serializes all fields correctly.
+    /// </summary>
+    [Fact]
+    public void EvaluationResult_Serializes_RequiredFields()
+    {
+        // Contract requires: success
+        var result = new EvaluationResult(
+            Success: true,
+            Value: "42",
+            Type: "System.Int32",
+            HasChildren: false,
+            Error: null
+        );
+
+        var json = JsonSerializer.Serialize(result, JsonOptions);
+        var doc = JsonDocument.Parse(json);
+        var root = doc.RootElement;
+
+        root.TryGetProperty("success", out var success).Should().BeTrue();
+        success.GetBoolean().Should().BeTrue();
+
+        root.TryGetProperty("value", out var value).Should().BeTrue();
+        value.GetString().Should().Be("42");
+
+        root.TryGetProperty("type", out var type).Should().BeTrue();
+        type.GetString().Should().Be("System.Int32");
+
+        root.TryGetProperty("hasChildren", out var hasChildren).Should().BeTrue();
+        hasChildren.GetBoolean().Should().BeFalse();
+    }
+
+    /// <summary>
+    /// EvaluationError serializes all fields correctly.
+    /// </summary>
+    [Fact]
+    public void EvaluationError_Serializes_RequiredFields()
+    {
+        // Contract requires: code, message
+        var error = new EvaluationError(
+            Code: "syntax_error",
+            Message: "Unexpected token at position 5",
+            ExceptionType: null,
+            Position: 5
+        );
+
+        var json = JsonSerializer.Serialize(error, JsonOptions);
+        var doc = JsonDocument.Parse(json);
+        var root = doc.RootElement;
+
+        root.TryGetProperty("code", out var code).Should().BeTrue();
+        code.GetString().Should().Be("syntax_error");
+
+        root.TryGetProperty("message", out var message).Should().BeTrue();
+        message.GetString().Should().Be("Unexpected token at position 5");
+
+        root.TryGetProperty("position", out var position).Should().BeTrue();
+        position.GetInt32().Should().Be(5);
+    }
+
+    /// <summary>
+    /// Inspection error codes are defined.
+    /// </summary>
+    [Fact]
+    public void InspectionErrorCodes_AllDefined_AreScreamingSnakeCase()
+    {
+        var codes = new[]
+        {
+            ErrorCodes.InvalidThread,
+            ErrorCodes.InvalidFrame,
+            ErrorCodes.StackTraceFailed,
+            ErrorCodes.VariablesFailed,
+            ErrorCodes.NotPaused
         };
 
         foreach (var code in codes)

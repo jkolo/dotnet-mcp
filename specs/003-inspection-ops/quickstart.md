@@ -248,9 +248,11 @@ When you need to interrupt execution without a breakpoint:
 
 // Response
 {
-  "error": true,
-  "code": "not_attached",
-  "message": "No debugging session active. Use debug_launch or debug_attach first."
+  "success": false,
+  "error": {
+    "code": "NO_SESSION",
+    "message": "No active debug session"
+  }
 }
 ```
 
@@ -262,9 +264,11 @@ When you need to interrupt execution without a breakpoint:
 
 // Response
 {
-  "error": true,
-  "code": "not_paused",
-  "message": "Process must be paused for inspection. Use debug_pause or set a breakpoint."
+  "success": false,
+  "error": {
+    "code": "NOT_PAUSED",
+    "message": "Cannot get variables: process is not paused (current state: running)"
+  }
 }
 ```
 
@@ -276,9 +280,12 @@ When you need to interrupt execution without a breakpoint:
 
 // Response
 {
-  "error": true,
-  "code": "invalid_thread",
-  "message": "Thread 999 not found"
+  "success": false,
+  "error": {
+    "code": "INVALID_THREAD",
+    "message": "Thread 999 not found",
+    "details": { "thread_id": 999 }
+  }
 }
 ```
 
@@ -292,7 +299,7 @@ When you need to interrupt execution without a breakpoint:
 {
   "success": false,
   "error": {
-    "code": "eval_timeout",
+    "code": "EVAL_TIMEOUT",
     "message": "Expression evaluation timed out after 1000ms"
   }
 }

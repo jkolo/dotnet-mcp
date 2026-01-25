@@ -73,25 +73,20 @@ DotnetMcp/
 │   ├── BreakpointRemoveTool.cs    # (existing from 002)
 │   ├── BreakpointListTool.cs      # (existing from 002)
 │   ├── BreakpointWaitTool.cs      # (existing from 002)
-│   ├── DebugPauseTool.cs          # NEW
-│   ├── ThreadsListTool.cs         # NEW
-│   ├── StacktraceGetTool.cs       # NEW
-│   ├── VariablesGetTool.cs        # NEW
-│   └── EvaluateTool.cs            # NEW
+│   ├── DebugPauseTool.cs          # NEW - pause execution
+│   ├── ThreadsListTool.cs         # NEW - list threads
+│   ├── StacktraceGetTool.cs       # NEW - get stack trace
+│   ├── VariablesGetTool.cs        # NEW - inspect variables
+│   └── EvaluateTool.cs            # NEW - evaluate expressions
 ├── Services/            # Core debugging services
-│   ├── DebugSessionManager.cs     # (existing - extend with pause)
-│   ├── ProcessDebugger.cs         # (existing - extend with thread/frame/value inspection)
-│   ├── IProcessDebugger.cs        # (existing - extend interface)
+│   ├── DebugSessionManager.cs     # (existing - extended with pause)
+│   ├── ProcessDebugger.cs         # (existing - extended with inspection methods)
+│   │                              # Contains: GetThreads(), GetStackFrames(),
+│   │                              #           GetVariables(), PauseAsync(),
+│   │                              #           EvaluateAsync()
+│   ├── IProcessDebugger.cs        # (existing - extended interface)
 │   ├── Breakpoints/               # (existing from 002)
-│   └── Inspection/                # NEW - inspection services
-│       ├── IThreadInspector.cs    # NEW - thread enumeration interface
-│       ├── ThreadInspector.cs     # NEW - thread enumeration
-│       ├── IStackWalker.cs        # NEW - stack frame traversal interface
-│       ├── StackWalker.cs         # NEW - stack frame traversal
-│       ├── IVariableInspector.cs  # NEW - variable reading interface
-│       ├── VariableInspector.cs   # NEW - ICorDebugValue traversal
-│       ├── IExpressionEvaluator.cs # NEW - expression evaluation interface
-│       └── ExpressionEvaluator.cs # NEW - ICorDebugEval wrapper
+│   └── Inspection/                # Reserved for future extraction if needed
 ├── Models/              # Domain models
 │   ├── DebugSession.cs            # (existing)
 │   ├── SessionState.cs            # (existing)
@@ -99,14 +94,15 @@ DotnetMcp/
 │   ├── SourceLocation.cs          # (existing)
 │   ├── Breakpoints/               # (existing from 002)
 │   └── Inspection/                # NEW - inspection models
-│       ├── ThreadInfo.cs          # NEW
-│       ├── ThreadState.cs         # NEW (enum)
-│       ├── StackFrame.cs          # NEW
-│       ├── Variable.cs            # NEW
-│       ├── VariableScope.cs       # NEW (enum)
-│       └── EvaluationResult.cs    # NEW
+│       ├── ThreadInfo.cs          # Thread information record
+│       ├── ThreadState.cs         # ThreadState enum
+│       ├── StackFrame.cs          # Stack frame record
+│       ├── Variable.cs            # Variable record
+│       ├── VariableScope.cs       # VariableScope enum
+│       ├── EvaluationResult.cs    # Expression result record
+│       └── EvaluationError.cs     # Evaluation error record
 └── Infrastructure/      # Cross-cutting concerns
-    └── Logging.cs                 # (existing - extend with inspection events)
+    └── Logging.cs                 # (existing - extended with inspection events)
 
 tests/DotnetMcp.Tests/
 ├── Contract/            # MCP schema validation tests
@@ -115,27 +111,37 @@ tests/DotnetMcp.Tests/
 │   ├── StacktraceGetContractTests.cs     # NEW
 │   ├── VariablesGetContractTests.cs      # NEW
 │   └── EvaluateContractTests.cs          # NEW
-├── Integration/         # End-to-end debugging tests
-│   ├── ThreadInspectionTests.cs          # NEW
-│   ├── StackInspectionTests.cs           # NEW
-│   ├── VariableInspectionTests.cs        # NEW
-│   └── ExpressionEvaluationTests.cs      # NEW
-└── Unit/                # Service unit tests
-    ├── ThreadInspectorTests.cs           # NEW
-    ├── StackWalkerTests.cs               # NEW
-    ├── VariableInspectorTests.cs         # NEW
-    └── ExpressionEvaluatorTests.cs       # NEW
+├── Integration/         # End-to-end debugging tests (pending)
+│   ├── StackInspectionTests.cs           # Pending
+│   ├── VariableInspectionTests.cs        # Pending
+│   ├── ThreadInspectionTests.cs          # Pending
+│   ├── ExpressionEvaluationTests.cs      # Pending
+│   └── PauseTests.cs                     # Pending
+├── Performance/         # Performance validation tests
+│   └── InspectionPerformanceTests.cs     # NEW - SC-001/002/004 tests
+└── Unit/                # ProcessDebugger unit tests (pending)
+    ├── StackWalkerTests.cs               # Pending
+    ├── VariableInspectorTests.cs         # Pending
+    ├── ThreadInspectorTests.cs           # Pending
+    └── ExpressionEvaluatorTests.cs       # Pending
 ```
 
-**Structure Decision**: Extends existing DotnetMcp project structure. New inspection-related
-tools in Tools/, new Inspection/ service subdirectory for thread/stack/variable/expression
-services, new Inspection/ model subdirectory for inspection entities. Services are split
-for single responsibility (ThreadInspector, StackWalker, VariableInspector, ExpressionEvaluator)
-rather than one monolithic InspectionManager.
+**Structure Decision**: Extends existing DotnetMcp project structure. All inspection
+operations are implemented directly in ProcessDebugger as methods (GetThreads,
+GetStackFrames, GetVariables, PauseAsync, EvaluateAsync) rather than separate service
+classes. This design follows the Simplicity principle by avoiding unnecessary abstraction
+layers - ProcessDebugger already has access to ICorDebug handles and the inspection
+methods naturally belong with the core debugging logic. The Services/Inspection/
+directory is reserved for potential future extraction if ProcessDebugger grows too large.
 
 ## Complexity Tracking
 
 > No violations to justify - design follows Simplicity principle.
-> Four new services in Inspection/ may seem like more than needed, but each handles a distinct
-> ICorDebug API surface (threads, frames, values, eval) and keeps complexity manageable.
-> Alternative of one InspectionManager would exceed readable size and violate single-responsibility.
+> Initial plan proposed four separate services in Inspection/ (ThreadInspector, StackWalker,
+> VariableInspector, ExpressionEvaluator). During implementation, a simpler approach was chosen:
+> all inspection methods are implemented directly in ProcessDebugger. This avoids:
+> - Additional abstraction layers
+> - Passing ICorDebug handles between services
+> - Service interface ceremony for internal-only operations
+> ProcessDebugger already manages the debugging lifecycle and has all necessary context.
+> If ProcessDebugger grows too large, methods can be extracted to separate services later.

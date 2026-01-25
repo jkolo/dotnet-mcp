@@ -782,9 +782,11 @@ All tools may return errors in this format:
 
 ```json
 {
-  "error": true,
-  "code": "not_attached",
-  "message": "No debugging session active. Use debug_launch or debug_attach first."
+  "success": false,
+  "error": {
+    "code": "NO_SESSION",
+    "message": "No active debug session"
+  }
 }
 ```
 
@@ -792,11 +794,17 @@ All tools may return errors in this format:
 
 | Code | Description |
 |------|-------------|
-| `not_attached` | No active debugging session |
-| `not_stopped` | Process must be stopped for this operation |
-| `invalid_thread` | Thread ID not found |
-| `invalid_frame` | Frame index out of range |
-| `invalid_breakpoint` | Breakpoint ID not found |
-| `evaluation_failed` | Expression evaluation error |
-| `timeout` | Operation timed out |
-| `process_exited` | Target process has terminated |
+| `NO_SESSION` | No active debugging session |
+| `NOT_PAUSED` | Process must be paused for this operation |
+| `INVALID_THREAD` | Thread ID not found |
+| `INVALID_FRAME` | Frame index out of range |
+| `BREAKPOINT_NOT_FOUND` | Breakpoint ID not found |
+| `EVAL_FAILED` | Expression evaluation error |
+| `TIMEOUT` | Operation timed out |
+| `PROCESS_NOT_FOUND` | Target process not found |
+| `NOT_DOTNET_PROCESS` | Process is not a .NET application |
+| `ATTACH_FAILED` | ICorDebug attach failed |
+| `STACKTRACE_FAILED` | Stack trace retrieval failed |
+| `VARIABLES_FAILED` | Variable inspection failed |
+| `INVALID_PARAMETER` | Invalid parameter value |
+| `INVALID_CONDITION` | Condition expression has syntax error |

@@ -1,4 +1,5 @@
 using DotnetMcp.Models;
+using DotnetMcp.Models.Inspection;
 
 namespace DotnetMcp.Services;
 
@@ -137,6 +138,59 @@ public interface IProcessDebugger
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <exception cref="InvalidOperationException">Thrown when not attached or not paused.</exception>
     Task StepAsync(StepMode mode, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Pauses execution of a running debuggee process.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>List of threads with their locations after pause.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when not attached.</exception>
+    Task<IReadOnlyList<ThreadInfo>> PauseAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets all managed threads in the debuggee process.
+    /// </summary>
+    /// <returns>List of thread information.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when not attached.</exception>
+    IReadOnlyList<ThreadInfo> GetThreads();
+
+    /// <summary>
+    /// Gets the stack frames for a specified thread.
+    /// </summary>
+    /// <param name="threadId">Thread ID (default: current thread).</param>
+    /// <param name="startFrame">Start from frame N (for pagination).</param>
+    /// <param name="maxFrames">Maximum frames to return.</param>
+    /// <returns>Stack frames and total count.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when not attached or not paused.</exception>
+    (IReadOnlyList<Models.Inspection.StackFrame> Frames, int TotalFrames) GetStackFrames(int? threadId = null, int startFrame = 0, int maxFrames = 20);
+
+    /// <summary>
+    /// Gets variables for a specified stack frame.
+    /// </summary>
+    /// <param name="threadId">Thread ID (default: current thread).</param>
+    /// <param name="frameIndex">Frame index (0 = top of stack).</param>
+    /// <param name="scope">Which variables to return (all, locals, arguments, this).</param>
+    /// <param name="expandPath">Variable path to expand children (e.g., "user.Address").</param>
+    /// <returns>List of variables.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when not attached or not paused.</exception>
+    IReadOnlyList<Variable> GetVariables(int? threadId = null, int frameIndex = 0, string scope = "all", string? expandPath = null);
+
+    /// <summary>
+    /// Evaluates a C# expression in the debuggee context.
+    /// </summary>
+    /// <param name="expression">The expression to evaluate.</param>
+    /// <param name="threadId">Thread context (null = current thread).</param>
+    /// <param name="frameIndex">Stack frame context (0 = top).</param>
+    /// <param name="timeoutMs">Evaluation timeout in milliseconds.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Evaluation result with value or error.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when not attached or not paused.</exception>
+    Task<EvaluationResult> EvaluateAsync(
+        string expression,
+        int? threadId = null,
+        int frameIndex = 0,
+        int timeoutMs = 5000,
+        CancellationToken cancellationToken = default);
 }
 
 /// <summary>

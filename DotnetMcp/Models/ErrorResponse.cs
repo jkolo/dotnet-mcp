@@ -88,4 +88,18 @@ public static class ErrorCodes
 
     /// <summary>Step operation failed.</summary>
     public const string StepFailed = "STEP_FAILED";
+
+    // Inspection error codes
+
+    /// <summary>Specified thread ID is invalid or does not exist.</summary>
+    public const string InvalidThread = "INVALID_THREAD";
+
+    /// <summary>Specified frame index is out of range.</summary>
+    public const string InvalidFrame = "INVALID_FRAME";
+
+    /// <summary>Stack trace retrieval failed.</summary>
+    public const string StackTraceFailed = "STACKTRACE_FAILED";
+
+    /// <summary>Variable inspection failed.</summary>
+    public const string VariablesFailed = "VARIABLES_FAILED";
 }

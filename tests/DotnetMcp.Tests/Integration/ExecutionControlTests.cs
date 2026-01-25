@@ -42,12 +42,12 @@ public class ExecutionControlTests : IAsyncLifetime
         _pdbLoggerMock = new Mock<ILogger<PdbSymbolReader>>();
         _pdbCacheLoggerMock = new Mock<ILogger<PdbSymbolCache>>();
 
-        _processDebugger = new ProcessDebugger(_debuggerLoggerMock.Object);
+        _pdbCache = new PdbSymbolCache(_pdbCacheLoggerMock.Object);
+        _pdbReader = new PdbSymbolReader(_pdbCache, _pdbLoggerMock.Object);
+        _processDebugger = new ProcessDebugger(_debuggerLoggerMock.Object, _pdbReader);
         _sessionManager = new DebugSessionManager(_processDebugger, _managerLoggerMock.Object);
 
         _breakpointRegistry = new BreakpointRegistry(_registryLoggerMock.Object);
-        _pdbCache = new PdbSymbolCache(_pdbCacheLoggerMock.Object);
-        _pdbReader = new PdbSymbolReader(_pdbCache, _pdbLoggerMock.Object);
         _conditionEvaluator = new SimpleConditionEvaluator();
         _breakpointManager = new BreakpointManager(
             _breakpointRegistry,

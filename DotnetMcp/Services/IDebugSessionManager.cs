@@ -87,4 +87,57 @@ public interface IDebugSessionManager
     /// <param name="cancellationToken">Cancellation token.</param>
     /// <returns>True if state was reached, false if timeout occurred.</returns>
     Task<bool> WaitForStateAsync(SessionState targetState, TimeSpan timeout, CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets stack frames for a specified thread.
+    /// </summary>
+    /// <param name="threadId">Thread ID (null = current thread).</param>
+    /// <param name="startFrame">Start from frame N (for pagination).</param>
+    /// <param name="maxFrames">Maximum frames to return.</param>
+    /// <returns>Stack frames and total count.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when no session is active or not paused.</exception>
+    (IReadOnlyList<Models.Inspection.StackFrame> Frames, int TotalFrames) GetStackFrames(int? threadId = null, int startFrame = 0, int maxFrames = 20);
+
+    /// <summary>
+    /// Gets all managed threads in the debuggee process.
+    /// </summary>
+    /// <returns>List of thread information.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when no session is active.</exception>
+    IReadOnlyList<Models.Inspection.ThreadInfo> GetThreads();
+
+    /// <summary>
+    /// Gets variables for a specified stack frame.
+    /// </summary>
+    /// <param name="threadId">Thread ID (null = current thread).</param>
+    /// <param name="frameIndex">Frame index (0 = top of stack).</param>
+    /// <param name="scope">Which variables to return (all, locals, arguments, this).</param>
+    /// <param name="expandPath">Variable path to expand children.</param>
+    /// <returns>List of variables.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when no session is active or not paused.</exception>
+    IReadOnlyList<Models.Inspection.Variable> GetVariables(int? threadId = null, int frameIndex = 0, string scope = "all", string? expandPath = null);
+
+    /// <summary>
+    /// Pauses execution of a running process.
+    /// </summary>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>List of threads with their locations after pause.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when no session is active.</exception>
+    Task<IReadOnlyList<Models.Inspection.ThreadInfo>> PauseAsync(CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Evaluates a C# expression in the debuggee context.
+    /// </summary>
+    /// <param name="expression">The expression to evaluate.</param>
+    /// <param name="threadId">Thread context (null = current thread).</param>
+    /// <param name="frameIndex">Stack frame context (0 = top).</param>
+    /// <param name="timeoutMs">Evaluation timeout in milliseconds.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Evaluation result with value or error.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when no session is active or not paused.</exception>
+    Task<Models.Inspection.EvaluationResult> EvaluateAsync(
+        string expression,
+        int? threadId = null,
+        int frameIndex = 0,
+        int timeoutMs = 5000,
+        CancellationToken cancellationToken = default);
 }

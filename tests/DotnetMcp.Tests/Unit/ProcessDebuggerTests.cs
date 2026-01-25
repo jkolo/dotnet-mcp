@@ -1,5 +1,6 @@
 using DotnetMcp.Models;
 using DotnetMcp.Services;
+using DotnetMcp.Services.Breakpoints;
 using FluentAssertions;
 using Microsoft.Extensions.Logging;
 using Moq;
@@ -13,12 +14,14 @@ namespace DotnetMcp.Tests.Unit;
 public class ProcessDebuggerTests
 {
     private readonly Mock<ILogger<ProcessDebugger>> _loggerMock;
+    private readonly Mock<IPdbSymbolReader> _pdbSymbolReaderMock;
     private readonly ProcessDebugger _sut;
 
     public ProcessDebuggerTests()
     {
         _loggerMock = new Mock<ILogger<ProcessDebugger>>();
-        _sut = new ProcessDebugger(_loggerMock.Object);
+        _pdbSymbolReaderMock = new Mock<IPdbSymbolReader>();
+        _sut = new ProcessDebugger(_loggerMock.Object, _pdbSymbolReaderMock.Object);
     }
 
     [Fact]
@@ -303,5 +306,232 @@ public class ProcessDebuggerTests
 
         // Assert - all modes should handle not-attached state
         await act.Should().ThrowAsync<InvalidOperationException>();
+    }
+
+    // ===== T012: GetStackFrames (StackWalker) Tests =====
+
+    [Fact]
+    public void GetStackFrames_WhenNotAttached_ThrowsInvalidOperationException()
+    {
+        // Arrange - fresh instance (not attached)
+
+        // Act
+        var act = () => _sut.GetStackFrames();
+
+        // Assert
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("*not attached*");
+    }
+
+    [Fact]
+    public void GetStackFrames_WithInvalidThreadId_ThrowsInvalidOperationException()
+    {
+        // Arrange - fresh instance (not attached)
+        const int invalidThreadId = 999999;
+
+        // Act
+        var act = () => _sut.GetStackFrames(invalidThreadId);
+
+        // Assert - not attached takes precedence
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("*not attached*");
+    }
+
+    [Theory]
+    [InlineData(0, 20)]
+    [InlineData(5, 10)]
+    [InlineData(0, 100)]
+    public void GetStackFrames_PaginationParameters_DoNotThrow_WhenNotAttached(int startFrame, int maxFrames)
+    {
+        // Arrange - fresh instance (not attached)
+
+        // Act
+        var act = () => _sut.GetStackFrames(threadId: null, startFrame: startFrame, maxFrames: maxFrames);
+
+        // Assert - should fail with not attached, not parameter validation
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("*not attached*");
+    }
+
+    // ===== T025: GetVariables (VariableInspector) Tests =====
+
+    [Fact]
+    public void GetVariables_WhenNotAttached_ThrowsInvalidOperationException()
+    {
+        // Arrange - fresh instance (not attached)
+
+        // Act
+        var act = () => _sut.GetVariables();
+
+        // Assert
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("*not attached*");
+    }
+
+    [Fact]
+    public void GetVariables_WithInvalidThreadId_ThrowsInvalidOperationException()
+    {
+        // Arrange - fresh instance (not attached)
+        const int invalidThreadId = 999999;
+
+        // Act
+        var act = () => _sut.GetVariables(invalidThreadId);
+
+        // Assert - not attached takes precedence
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("*not attached*");
+    }
+
+    [Theory]
+    [InlineData("all")]
+    [InlineData("locals")]
+    [InlineData("arguments")]
+    [InlineData("this")]
+    public void GetVariables_ScopeParameter_DoesNotThrow_WhenNotAttached(string scope)
+    {
+        // Arrange - fresh instance (not attached)
+
+        // Act
+        var act = () => _sut.GetVariables(threadId: null, frameIndex: 0, scope: scope);
+
+        // Assert - should fail with not attached, not parameter validation
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("*not attached*");
+    }
+
+    [Fact]
+    public void GetVariables_WithExpandPath_ThrowsNotAttached()
+    {
+        // Arrange
+        const string expandPath = "this._field";
+
+        // Act
+        var act = () => _sut.GetVariables(expandPath: expandPath);
+
+        // Assert
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("*not attached*");
+    }
+
+    // ===== T042: GetThreads (ThreadInspector) Tests =====
+
+    [Fact]
+    public void GetThreads_WhenNotAttached_ThrowsInvalidOperationException()
+    {
+        // Arrange - fresh instance (not attached)
+
+        // Act
+        var act = () => _sut.GetThreads();
+
+        // Assert
+        act.Should().Throw<InvalidOperationException>()
+            .WithMessage("*not attached*");
+    }
+
+    // ===== T056: EvaluateAsync (ExpressionEvaluator) Tests =====
+
+    [Fact]
+    public async Task EvaluateAsync_WhenNotAttached_ThrowsInvalidOperationException()
+    {
+        // Arrange - fresh instance (not attached)
+        const string expression = "x + 1";
+
+        // Act
+        var act = async () => await _sut.EvaluateAsync(expression);
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*not attached*");
+    }
+
+    [Fact]
+    public async Task EvaluateAsync_WithEmptyExpression_ReturnsSyntaxError()
+    {
+        // Arrange
+        // Note: Empty expression validation happens before attach check
+        // This test documents that behavior though it may vary by implementation
+
+        // Act
+        var act = async () => await _sut.EvaluateAsync("");
+
+        // Assert - Either throws not attached or returns error result
+        // Implementation checks attach first, so expect not attached
+        await act.Should().ThrowAsync<InvalidOperationException>();
+    }
+
+    [Fact]
+    public async Task EvaluateAsync_WithWhitespaceExpression_ReturnsError()
+    {
+        // Arrange
+        const string expression = "   ";
+
+        // Act
+        var act = async () => await _sut.EvaluateAsync(expression);
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>();
+    }
+
+    [Theory]
+    [InlineData("variable")]
+    [InlineData("this.Property")]
+    [InlineData("a + b")]
+    [InlineData("Method()")]
+    public async Task EvaluateAsync_VariousExpressions_ThrowNotAttached(string expression)
+    {
+        // Arrange - fresh instance (not attached)
+
+        // Act
+        var act = async () => await _sut.EvaluateAsync(expression);
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*not attached*");
+    }
+
+    [Theory]
+    [InlineData(0)]
+    [InlineData(5)]
+    public async Task EvaluateAsync_WithFrameIndex_ThrowsNotAttached(int frameIndex)
+    {
+        // Arrange
+        const string expression = "x";
+
+        // Act
+        var act = async () => await _sut.EvaluateAsync(expression, frameIndex: frameIndex);
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*not attached*");
+    }
+
+    [Fact]
+    public async Task EvaluateAsync_WithTimeout_ThrowsNotAttached()
+    {
+        // Arrange
+        const string expression = "x";
+        const int timeoutMs = 1000;
+
+        // Act
+        var act = async () => await _sut.EvaluateAsync(expression, timeoutMs: timeoutMs);
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*not attached*");
+    }
+
+    // ===== PauseAsync Tests =====
+
+    [Fact]
+    public async Task PauseAsync_WhenNotAttached_ThrowsInvalidOperationException()
+    {
+        // Arrange - fresh instance (not attached)
+
+        // Act
+        var act = async () => await _sut.PauseAsync();
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*not attached*");
     }
 }

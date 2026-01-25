@@ -1,5 +1,6 @@
 using DotnetMcp.Models;
 using DotnetMcp.Services;
+using DotnetMcp.Services.Breakpoints;
 using FluentAssertions;
 using Microsoft.Extensions.Logging;
 using Moq;
@@ -15,6 +16,7 @@ public class StateTests : IDisposable
 {
     private readonly Mock<ILogger<ProcessDebugger>> _debuggerLoggerMock;
     private readonly Mock<ILogger<DebugSessionManager>> _managerLoggerMock;
+    private readonly Mock<IPdbSymbolReader> _pdbSymbolReaderMock;
     private readonly ProcessDebugger _processDebugger;
     private readonly DebugSessionManager _sessionManager;
 
@@ -22,7 +24,8 @@ public class StateTests : IDisposable
     {
         _debuggerLoggerMock = new Mock<ILogger<ProcessDebugger>>();
         _managerLoggerMock = new Mock<ILogger<DebugSessionManager>>();
-        _processDebugger = new ProcessDebugger(_debuggerLoggerMock.Object);
+        _pdbSymbolReaderMock = new Mock<IPdbSymbolReader>();
+        _processDebugger = new ProcessDebugger(_debuggerLoggerMock.Object, _pdbSymbolReaderMock.Object);
         _sessionManager = new DebugSessionManager(_processDebugger, _managerLoggerMock.Object);
     }
 
