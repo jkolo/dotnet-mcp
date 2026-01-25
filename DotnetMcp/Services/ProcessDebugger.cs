@@ -1,9 +1,12 @@
 using System.Diagnostics;
+using System.Globalization;
 using System.Runtime.InteropServices;
+using System.Text;
 using ClrDebug;
 using DotnetMcp.Infrastructure;
 using DotnetMcp.Models;
 using DotnetMcp.Models.Inspection;
+using DotnetMcp.Models.Memory;
 using DotnetMcp.Services.Breakpoints;
 using Microsoft.Extensions.Logging;
 using static System.Runtime.InteropServices.NativeLibrary;
@@ -3023,4 +3026,908 @@ public sealed class ProcessDebugger : IProcessDebugger, IDisposable
 
         return null;
     }
+
+    #region Memory Inspection Operations
+
+    /// <inheritdoc />
+    public Task<ObjectInspection> InspectObjectAsync(
+        string objectRef,
+        int depth = 1,
+        int? threadId = null,
+        int frameIndex = 0,
+        CancellationToken cancellationToken = default)
+    {
+        lock (_lock)
+        {
+            if (_process == null)
+            {
+                throw new InvalidOperationException("Cannot inspect object: debugger is not attached to any process");
+            }
+
+            if (_currentState != SessionState.Paused)
+            {
+                throw new InvalidOperationException($"Cannot inspect object: process is not paused (current state: {_currentState})");
+            }
+
+            _logger.LogDebug("Inspecting object '{ObjectRef}' with depth {Depth}", objectRef, depth);
+
+            // Resolve the expression to get the object value
+            var value = ResolveExpressionToValue(objectRef, threadId, frameIndex);
+
+            if (value == null)
+            {
+                throw new InvalidOperationException($"Invalid reference: could not resolve '{objectRef}'");
+            }
+
+            var visitedAddresses = new HashSet<ulong>();
+            return Task.FromResult(InspectObjectValue(value, depth, visitedAddresses));
+        }
+    }
+
+    /// <summary>
+    /// Resolves an expression to a CorDebugValue.
+    /// </summary>
+    private CorDebugValue? ResolveExpressionToValue(string expression, int? threadId, int frameIndex)
+    {
+        // Get the IL frame for the specified thread/frame
+        var ilFrame = GetILFrame(threadId, frameIndex);
+        if (ilFrame == null) return null;
+
+        // Try to resolve as a local variable or argument
+        var parts = expression.Split('.');
+        CorDebugValue? currentValue = null;
+
+        // Get the root value
+        if (parts[0] == "this")
+        {
+            currentValue = TryGetThisForEval(ilFrame);
+        }
+        else
+        {
+            currentValue = TryGetLocalOrArgument(parts[0], ilFrame);
+        }
+
+        if (currentValue == null) return null;
+
+        // Navigate the path if there are more parts
+        for (int i = 1; i < parts.Length; i++)
+        {
+            var memberName = parts[i];
+            var fieldValue = TryGetFieldValue(currentValue, memberName);
+            if (fieldValue == null) return null;
+            currentValue = fieldValue;
+        }
+
+        return currentValue;
+    }
+
+    private ObjectInspection InspectObjectValue(CorDebugValue value, int depth, HashSet<ulong> visitedAddresses)
+    {
+        // Handle null reference
+        if (value is CorDebugReferenceValue refValue)
+        {
+            if (refValue.IsNull)
+            {
+                var nullType = GetTypeName(value);
+                return new ObjectInspection
+                {
+                    Address = "0x0",
+                    TypeName = nullType,
+                    Size = 0,
+                    Fields = [],
+                    IsNull = true
+                };
+            }
+
+            // Check for circular references
+            var address = refValue.Value;
+            if (!visitedAddresses.Add(address))
+            {
+                var circularType = GetTypeName(value);
+                return new ObjectInspection
+                {
+                    Address = $"0x{address:X16}",
+                    TypeName = circularType,
+                    Size = 0,
+                    Fields = [],
+                    IsNull = false,
+                    HasCircularRef = true
+                };
+            }
+
+            var derefValue = refValue.Dereference();
+            if (derefValue != null)
+            {
+                var result = InspectObjectValueCore(derefValue, depth, visitedAddresses);
+                result = result with { Address = $"0x{address:X16}" };
+                return result;
+            }
+        }
+
+        return InspectObjectValueCore(value, depth, visitedAddresses);
+    }
+
+    private ObjectInspection InspectObjectValueCore(CorDebugValue value, int depth, HashSet<ulong> visitedAddresses)
+    {
+        var typeName = GetTypeName(value);
+        var fields = new List<FieldDetail>();
+        int size = 0;
+        bool truncated = false;
+
+        try
+        {
+            size = (int)value.Size;
+        }
+        catch
+        {
+            // Size not available
+        }
+
+        // Handle string values specially
+        if (value is CorDebugStringValue stringValue)
+        {
+            var len = stringValue.Length;
+            var str = stringValue.GetString((int)len) ?? "";
+            if (str.Length > 1000)
+            {
+                str = str.Substring(0, 1000) + "...";
+            }
+
+            return new ObjectInspection
+            {
+                Address = "0x0",
+                TypeName = "System.String",
+                Size = size,
+                Fields =
+                [
+                    new FieldDetail
+                    {
+                        Name = "value",
+                        TypeName = "System.String",
+                        Value = $"\"{str}\"",
+                        Offset = 0,
+                        Size = str.Length * 2,
+                        HasChildren = false
+                    }
+                ],
+                IsNull = false
+            };
+        }
+
+        // Handle array values
+        if (value is CorDebugArrayValue arrayValue)
+        {
+            var count = (int)arrayValue.Count;
+            var elementTypeName = GetArrayElementTypeName(arrayValue);
+            var maxElements = Math.Min(count, 100);
+
+            for (int i = 0; i < maxElements; i++)
+            {
+                try
+                {
+                    var element = arrayValue.GetElementAtPosition(i);
+                    if (element != null)
+                    {
+                        var (elemValue, elemType, hasChildren, childCount) = FormatValue(element);
+                        fields.Add(new FieldDetail
+                        {
+                            Name = $"[{i}]",
+                            TypeName = elemType,
+                            Value = elemValue,
+                            Offset = i * 8, // Approximate
+                            Size = 8, // Pointer size for references
+                            HasChildren = hasChildren,
+                            ChildCount = childCount
+                        });
+                    }
+                }
+                catch
+                {
+                    // Skip inaccessible elements
+                }
+            }
+
+            if (count > 100)
+            {
+                truncated = true;
+            }
+
+            return new ObjectInspection
+            {
+                Address = "0x0",
+                TypeName = $"{elementTypeName}[]",
+                Size = size,
+                Fields = fields,
+                IsNull = false,
+                Truncated = truncated
+            };
+        }
+
+        // Handle object values
+        if (value is CorDebugObjectValue objValue)
+        {
+            try
+            {
+                var objClass = objValue.Class;
+                if (objClass != null)
+                {
+                    var module = objClass.Module;
+                    var metaImport = module.GetMetaDataInterface<ClrDebug.MetaDataImport>();
+                    var fieldTokens = metaImport.EnumFields((int)objClass.Token).ToList();
+
+                    int offset = 0;
+                    foreach (var fieldToken in fieldTokens)
+                    {
+                        if (fields.Count >= 100)
+                        {
+                            truncated = true;
+                            break;
+                        }
+
+                        try
+                        {
+                            var fieldProps = metaImport.GetFieldProps(fieldToken);
+                            var fieldAttrs = fieldProps.pdwAttr;
+
+                            // Skip static fields unless explicitly requested
+                            bool isStatic = (fieldAttrs & CorFieldAttr.fdStatic) != 0;
+                            if (isStatic) continue;
+
+                            var fieldValue = objValue.GetFieldValue(objClass.Raw, (int)fieldToken);
+                            if (fieldValue != null)
+                            {
+                                var (formattedValue, fieldType, hasChildren, childCount) = FormatValue(fieldValue);
+                                int fieldSize = 0;
+                                try { fieldSize = (int)fieldValue.Size; } catch { }
+
+                                fields.Add(new FieldDetail
+                                {
+                                    Name = fieldProps.szField ?? $"field_{fieldToken}",
+                                    TypeName = fieldType,
+                                    Value = formattedValue,
+                                    Offset = offset,
+                                    Size = fieldSize,
+                                    HasChildren = hasChildren,
+                                    ChildCount = childCount,
+                                    IsStatic = isStatic
+                                });
+
+                                offset += fieldSize > 0 ? fieldSize : 8;
+                            }
+                        }
+                        catch (Exception ex)
+                        {
+                            _logger.LogDebug(ex, "Error getting field {FieldToken}", fieldToken);
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Error enumerating fields for object");
+            }
+        }
+
+        // Handle boxed values
+        if (value is CorDebugBoxValue boxValue)
+        {
+            var unboxed = boxValue.Object;
+            if (unboxed != null)
+            {
+                return InspectObjectValueCore(unboxed, depth, visitedAddresses);
+            }
+        }
+
+        // Handle primitive values
+        if (value is CorDebugGenericValue genericValue)
+        {
+            var primitiveValue = GetPrimitiveValue(genericValue);
+            fields.Add(new FieldDetail
+            {
+                Name = "value",
+                TypeName = typeName,
+                Value = primitiveValue,
+                Offset = 0,
+                Size = size,
+                HasChildren = false
+            });
+        }
+
+        return new ObjectInspection
+        {
+            Address = "0x0",
+            TypeName = typeName,
+            Size = size,
+            Fields = fields,
+            IsNull = false,
+            Truncated = truncated
+        };
+    }
+
+    private string GetArrayElementTypeName(CorDebugArrayValue arrayValue)
+    {
+        try
+        {
+            var exactType = arrayValue.ExactType;
+            if (exactType != null)
+            {
+                var firstTypeParam = exactType.TypeParameters?.FirstOrDefault();
+                if (firstTypeParam != null)
+                {
+                    var typeClass = firstTypeParam.Class;
+                    if (typeClass != null)
+                    {
+                        var module = typeClass.Module;
+                        var metaImport = module.GetMetaDataInterface<ClrDebug.MetaDataImport>();
+                        var typeProps = metaImport.GetTypeDefProps((int)typeClass.Token);
+                        return typeProps.szTypeDef ?? "Object";
+                    }
+                }
+            }
+        }
+        catch
+        {
+            // Fallback
+        }
+
+        return "Object";
+    }
+
+    /// <inheritdoc />
+    public Task<MemoryRegion> ReadMemoryAsync(
+        string address,
+        int size = 256,
+        CancellationToken cancellationToken = default)
+    {
+        lock (_lock)
+        {
+            if (_process == null)
+            {
+                throw new InvalidOperationException("Cannot read memory: debugger is not attached to any process");
+            }
+
+            if (_currentState != SessionState.Paused)
+            {
+                throw new InvalidOperationException($"Cannot read memory: process is not paused (current state: {_currentState})");
+            }
+
+            // Validate size limit (64KB max)
+            const int MaxSize = 65536;
+            if (size > MaxSize)
+            {
+                throw new ArgumentException($"Requested size {size} exceeds maximum limit of {MaxSize} bytes");
+            }
+
+            if (size <= 0)
+            {
+                throw new ArgumentException("Size must be positive");
+            }
+
+            // Parse address
+            ulong addr;
+            if (address.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+            {
+                addr = ulong.Parse(address.Substring(2), NumberStyles.HexNumber);
+            }
+            else
+            {
+                addr = ulong.Parse(address);
+            }
+
+            _logger.LogDebug("Reading {Size} bytes from address {Address}", size, address);
+
+            // Read memory using ICorDebugProcess
+            var buffer = new byte[size];
+            int bytesRead = 0;
+            string? error = null;
+
+            try
+            {
+                var rawProcess = _process.Raw;
+                // ICorDebugProcess.ReadMemory signature: (address, size, buffer, out bytesRead)
+                var handle = GCHandle.Alloc(buffer, GCHandleType.Pinned);
+                try
+                {
+                    rawProcess.ReadMemory(addr, size, handle.AddrOfPinnedObject(), out bytesRead);
+                }
+                finally
+                {
+                    handle.Free();
+                }
+
+                if (bytesRead < size)
+                {
+                    error = $"Partial read: {bytesRead} of {size} bytes";
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogWarning(ex, "Memory read failed at address {Address}", address);
+                throw new InvalidOperationException($"Failed to read memory at address {address}: {ex.Message}");
+            }
+
+            // Format as hex dump with 16 bytes per line
+            var hexBuilder = new StringBuilder();
+            var asciiBuilder = new StringBuilder();
+
+            for (int i = 0; i < bytesRead; i++)
+            {
+                if (i > 0 && i % 16 == 0)
+                {
+                    hexBuilder.AppendLine();
+                    asciiBuilder.AppendLine();
+                }
+                else if (i > 0)
+                {
+                    hexBuilder.Append(' ');
+                }
+
+                hexBuilder.Append(buffer[i].ToString("X2"));
+
+                // ASCII representation
+                char c = (char)buffer[i];
+                asciiBuilder.Append(c >= 0x20 && c <= 0x7E ? c : '.');
+            }
+
+            return Task.FromResult(new MemoryRegion
+            {
+                Address = $"0x{addr:X16}",
+                RequestedSize = size,
+                ActualSize = bytesRead,
+                Bytes = hexBuilder.ToString(),
+                Ascii = asciiBuilder.ToString(),
+                Error = error
+            });
+        }
+    }
+
+    /// <inheritdoc />
+    public Task<ReferencesResult> GetOutboundReferencesAsync(
+        string objectRef,
+        bool includeArrays = true,
+        int maxResults = 50,
+        int? threadId = null,
+        int frameIndex = 0,
+        CancellationToken cancellationToken = default)
+    {
+        lock (_lock)
+        {
+            if (_process == null)
+            {
+                throw new InvalidOperationException("Cannot get references: debugger is not attached to any process");
+            }
+
+            if (_currentState != SessionState.Paused)
+            {
+                throw new InvalidOperationException($"Cannot get references: process is not paused (current state: {_currentState})");
+            }
+
+            // Clamp maxResults to 100
+            maxResults = Math.Min(maxResults, 100);
+
+            _logger.LogDebug("Getting outbound references for '{ObjectRef}' (max: {MaxResults})", objectRef, maxResults);
+
+            // Resolve the expression to get the object value
+            var value = ResolveExpressionToValue(objectRef, threadId, frameIndex);
+
+            if (value == null)
+            {
+                throw new InvalidOperationException($"Invalid reference: could not resolve '{objectRef}'");
+            }
+
+            var references = new List<ReferenceInfo>();
+            var targetAddress = "0x0";
+            var targetType = GetTypeName(value);
+
+            // Get the actual address if it's a reference
+            if (value is CorDebugReferenceValue refValue)
+            {
+                if (refValue.IsNull)
+                {
+                    return Task.FromResult(new ReferencesResult
+                    {
+                        TargetAddress = "0x0",
+                        TargetType = targetType,
+                        Outbound = [],
+                        OutboundCount = 0
+                    });
+                }
+
+                targetAddress = $"0x{refValue.Value:X16}";
+                var derefValue = refValue.Dereference();
+                if (derefValue != null)
+                {
+                    EnumerateOutboundReferences(derefValue, targetAddress, targetType, references, includeArrays, maxResults);
+                }
+            }
+            else
+            {
+                EnumerateOutboundReferences(value, targetAddress, targetType, references, includeArrays, maxResults);
+            }
+
+            var truncated = references.Count >= maxResults;
+            var actualCount = references.Count;
+
+            return Task.FromResult(new ReferencesResult
+            {
+                TargetAddress = targetAddress,
+                TargetType = targetType,
+                Outbound = references,
+                OutboundCount = actualCount,
+                Truncated = truncated
+            });
+        }
+    }
+
+    private void EnumerateOutboundReferences(
+        CorDebugValue value,
+        string sourceAddress,
+        string sourceType,
+        List<ReferenceInfo> references,
+        bool includeArrays,
+        int maxResults)
+    {
+        if (references.Count >= maxResults) return;
+
+        // Handle array values
+        if (value is CorDebugArrayValue arrayValue && includeArrays)
+        {
+            var count = (int)arrayValue.Count;
+            var maxElements = Math.Min(count, maxResults - references.Count);
+
+            for (int i = 0; i < maxElements && references.Count < maxResults; i++)
+            {
+                try
+                {
+                    var element = arrayValue.GetElementAtPosition(i);
+                    if (element is CorDebugReferenceValue elemRef && !elemRef.IsNull)
+                    {
+                        var elemType = GetTypeName(element);
+                        references.Add(new ReferenceInfo
+                        {
+                            SourceAddress = sourceAddress,
+                            SourceType = sourceType,
+                            TargetAddress = $"0x{elemRef.Value:X16}",
+                            TargetType = elemType,
+                            Path = $"[{i}]",
+                            ReferenceType = Models.Memory.ReferenceType.ArrayElement
+                        });
+                    }
+                }
+                catch
+                {
+                    // Skip inaccessible elements
+                }
+            }
+
+            return;
+        }
+
+        // Handle object values - enumerate reference fields
+        if (value is CorDebugObjectValue objValue)
+        {
+            try
+            {
+                var objClass = objValue.Class;
+                if (objClass != null)
+                {
+                    var module = objClass.Module;
+                    var metaImport = module.GetMetaDataInterface<ClrDebug.MetaDataImport>();
+                    var fieldTokens = metaImport.EnumFields((int)objClass.Token).ToList();
+
+                    foreach (var fieldToken in fieldTokens)
+                    {
+                        if (references.Count >= maxResults) break;
+
+                        try
+                        {
+                            var fieldProps = metaImport.GetFieldProps(fieldToken);
+                            var fieldAttrs = fieldProps.pdwAttr;
+
+                            // Skip static fields
+                            bool isStatic = (fieldAttrs & CorFieldAttr.fdStatic) != 0;
+                            if (isStatic) continue;
+
+                            var fieldValue = objValue.GetFieldValue(objClass.Raw, (int)fieldToken);
+                            if (fieldValue is CorDebugReferenceValue fieldRef && !fieldRef.IsNull)
+                            {
+                                var fieldType = GetTypeName(fieldValue);
+                                references.Add(new ReferenceInfo
+                                {
+                                    SourceAddress = sourceAddress,
+                                    SourceType = sourceType,
+                                    TargetAddress = $"0x{fieldRef.Value:X16}",
+                                    TargetType = fieldType,
+                                    Path = fieldProps.szField ?? $"field_{fieldToken}",
+                                    ReferenceType = Models.Memory.ReferenceType.Field
+                                });
+                            }
+                        }
+                        catch
+                        {
+                            // Skip inaccessible fields
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Error enumerating references for object");
+            }
+        }
+    }
+
+    /// <inheritdoc />
+    public Task<TypeLayout> GetTypeLayoutAsync(
+        string typeName,
+        bool includeInherited = true,
+        bool includePadding = true,
+        int? threadId = null,
+        int frameIndex = 0,
+        CancellationToken cancellationToken = default)
+    {
+        lock (_lock)
+        {
+            if (_process == null)
+            {
+                throw new InvalidOperationException("Cannot get type layout: debugger is not attached to any process");
+            }
+
+            if (_currentState != SessionState.Paused)
+            {
+                throw new InvalidOperationException($"Cannot get type layout: process is not paused (current state: {_currentState})");
+            }
+
+            _logger.LogDebug("Getting layout for type '{TypeName}'", typeName);
+
+            // Try to resolve the type name as an expression first (could be a variable)
+            var value = ResolveExpressionToValue(typeName, threadId, frameIndex);
+
+            CorDebugType? debugType = null;
+            string resolvedTypeName = typeName;
+
+            if (value != null)
+            {
+                // Get type from value
+                debugType = value.ExactType;
+                resolvedTypeName = GetTypeName(value);
+            }
+            else
+            {
+                // Search for type by name in loaded modules
+                debugType = FindTypeByName(typeName);
+                if (debugType != null)
+                {
+                    resolvedTypeName = typeName;
+                }
+            }
+
+            if (debugType == null)
+            {
+                throw new InvalidOperationException($"Type '{typeName}' not found in loaded modules");
+            }
+
+            return Task.FromResult(GetTypeLayoutFromDebugType(debugType, resolvedTypeName, includeInherited, includePadding));
+        }
+    }
+
+    private CorDebugType? FindTypeByName(string typeName)
+    {
+        // Search through all loaded modules for the type
+        lock (_lock)
+        {
+            if (_process == null) return null;
+
+            try
+            {
+                foreach (var appDomain in _process.AppDomains)
+                {
+                    foreach (var assembly in appDomain.Assemblies)
+                    {
+                        foreach (var module in assembly.Modules)
+                        {
+                            try
+                            {
+                                var metaImport = module.GetMetaDataInterface<ClrDebug.MetaDataImport>();
+
+                                // Try to find the type definition
+                                try
+                                {
+                                    var typeDefResult = metaImport.FindTypeDefByName(typeName, 0);
+                                    if (typeDefResult != 0)
+                                    {
+                                        var debugClass = module.GetClassFromToken(typeDefResult);
+                                        if (debugClass != null)
+                                        {
+                                            // Create a type from the class
+                                            return debugClass.GetParameterizedType(CorElementType.Class, 0, null);
+                                        }
+                                    }
+                                }
+                                catch
+                                {
+                                    // Type not found in this module
+                                }
+                            }
+                            catch
+                            {
+                                // Can't get metadata from this module
+                            }
+                        }
+                    }
+                }
+            }
+            catch (Exception ex)
+            {
+                _logger.LogDebug(ex, "Error searching for type '{TypeName}'", typeName);
+            }
+        }
+
+        return null;
+    }
+
+    private TypeLayout GetTypeLayoutFromDebugType(CorDebugType debugType, string typeName, bool includeInherited, bool includePadding)
+    {
+        var fields = new List<LayoutField>();
+        var padding = new List<PaddingRegion>();
+        int totalSize = 0;
+        int headerSize = 0;
+        bool isValueType = false;
+        string? baseType = null;
+
+        try
+        {
+            var typeClass = debugType.Class;
+            if (typeClass != null)
+            {
+                var module = typeClass.Module;
+                var metaImport = module.GetMetaDataInterface<ClrDebug.MetaDataImport>();
+                var typeProps = metaImport.GetTypeDefProps((int)typeClass.Token);
+
+                // Check if value type
+                isValueType = (typeProps.pdwTypeDefFlags & CorTypeAttr.tdSealed) != 0 &&
+                              typeProps.szTypeDef?.StartsWith("System.ValueType") == false &&
+                              !typeName.Contains("class", StringComparison.OrdinalIgnoreCase);
+
+                // Get base type
+                if (typeProps.ptkExtends != 0)
+                {
+                    try
+                    {
+                        var baseTypeProps = metaImport.GetTypeDefProps((int)typeProps.ptkExtends);
+                        baseType = baseTypeProps.szTypeDef;
+                    }
+                    catch
+                    {
+                        // Base type info not available
+                    }
+                }
+
+                // Header size: 16 bytes for reference types on 64-bit, 0 for value types
+                headerSize = isValueType ? 0 : 16;
+
+                // Enumerate fields
+                var fieldTokens = metaImport.EnumFields((int)typeClass.Token).ToList();
+                int currentOffset = 0;
+
+                foreach (var fieldToken in fieldTokens)
+                {
+                    try
+                    {
+                        var fieldProps = metaImport.GetFieldProps(fieldToken);
+                        var fieldAttrs = fieldProps.pdwAttr;
+
+                        // Skip static fields
+                        if ((fieldAttrs & CorFieldAttr.fdStatic) != 0) continue;
+
+                        // Get field type info
+                        var fieldTypeName = GetFieldTypeName(metaImport, fieldProps.ppvSigBlob);
+                        var fieldSize = GetFieldSize(fieldTypeName);
+                        var alignment = GetFieldAlignment(fieldTypeName);
+                        bool isReference = IsReferenceType(fieldTypeName);
+
+                        // Calculate offset with alignment
+                        if (currentOffset % alignment != 0)
+                        {
+                            var paddingNeeded = alignment - (currentOffset % alignment);
+
+                            if (includePadding && paddingNeeded > 0)
+                            {
+                                padding.Add(new PaddingRegion
+                                {
+                                    Offset = currentOffset,
+                                    Size = paddingNeeded,
+                                    Reason = $"Alignment for {fieldTypeName} ({alignment}-byte aligned)"
+                                });
+                            }
+
+                            currentOffset += paddingNeeded;
+                        }
+
+                        fields.Add(new LayoutField
+                        {
+                            Name = fieldProps.szField ?? $"field_{fieldToken}",
+                            TypeName = fieldTypeName,
+                            Offset = currentOffset,
+                            Size = fieldSize,
+                            Alignment = alignment,
+                            IsReference = isReference
+                        });
+
+                        currentOffset += fieldSize;
+                    }
+                    catch
+                    {
+                        // Skip problematic fields
+                    }
+                }
+
+                totalSize = headerSize + currentOffset;
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Error getting type layout for '{TypeName}'", typeName);
+        }
+
+        return new TypeLayout
+        {
+            TypeName = typeName,
+            TotalSize = totalSize,
+            HeaderSize = headerSize,
+            DataSize = totalSize - headerSize,
+            Fields = fields,
+            Padding = padding,
+            IsValueType = isValueType,
+            BaseType = baseType
+        };
+    }
+
+    private string GetFieldTypeName(ClrDebug.MetaDataImport metaImport, IntPtr sigBlob)
+    {
+        // Simplified field type name extraction
+        // In a full implementation, you'd parse the signature blob
+        return "Unknown";
+    }
+
+    private int GetFieldSize(string typeName)
+    {
+        return typeName switch
+        {
+            "System.Boolean" or "System.Byte" or "System.SByte" => 1,
+            "System.Char" or "System.Int16" or "System.UInt16" => 2,
+            "System.Int32" or "System.UInt32" or "System.Single" => 4,
+            "System.Int64" or "System.UInt64" or "System.Double" => 8,
+            "System.Decimal" => 16,
+            "System.IntPtr" or "System.UIntPtr" => 8, // 64-bit
+            _ => 8 // Reference types are pointer-sized
+        };
+    }
+
+    private int GetFieldAlignment(string typeName)
+    {
+        return typeName switch
+        {
+            "System.Boolean" or "System.Byte" or "System.SByte" => 1,
+            "System.Char" or "System.Int16" or "System.UInt16" => 2,
+            "System.Int32" or "System.UInt32" or "System.Single" => 4,
+            _ => 8 // 8-byte alignment for most other types on 64-bit
+        };
+    }
+
+    private bool IsReferenceType(string typeName)
+    {
+        return typeName switch
+        {
+            "System.Boolean" or "System.Byte" or "System.SByte" => false,
+            "System.Char" or "System.Int16" or "System.UInt16" => false,
+            "System.Int32" or "System.UInt32" or "System.Single" => false,
+            "System.Int64" or "System.UInt64" or "System.Double" => false,
+            "System.Decimal" => false,
+            "System.IntPtr" or "System.UIntPtr" => false,
+            _ => true
+        };
+    }
+
+    #endregion
 }

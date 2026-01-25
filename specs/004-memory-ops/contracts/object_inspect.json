@@ -1,0 +1,157 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "object_inspect",
+  "description": "Inspect a heap object's contents including all fields, types, and values",
+  "type": "object",
+  "properties": {
+    "tool": {
+      "const": "object_inspect"
+    },
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "object_ref": {
+          "type": "string",
+          "description": "Object reference from variables_get or evaluate result (address or variable path)"
+        },
+        "depth": {
+          "type": "integer",
+          "description": "Expansion depth for nested objects (default: 1, max: 10)",
+          "minimum": 1,
+          "maximum": 10,
+          "default": 1
+        },
+        "include_static": {
+          "type": "boolean",
+          "description": "Include static fields in inspection (default: false)",
+          "default": false
+        },
+        "max_string_length": {
+          "type": "integer",
+          "description": "Maximum string value length before truncation (default: 100)",
+          "minimum": 10,
+          "maximum": 10000,
+          "default": 100
+        },
+        "max_array_elements": {
+          "type": "integer",
+          "description": "Maximum array elements to preview (default: 10)",
+          "minimum": 1,
+          "maximum": 1000,
+          "default": 10
+        }
+      },
+      "required": ["object_ref"]
+    }
+  },
+  "response": {
+    "type": "object",
+    "properties": {
+      "success": {
+        "type": "boolean"
+      },
+      "inspection": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string",
+            "description": "Hex address of the object"
+          },
+          "typeName": {
+            "type": "string",
+            "description": "Full type name"
+          },
+          "size": {
+            "type": "integer",
+            "description": "Total object size in bytes"
+          },
+          "fields": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": { "type": "string" },
+                "typeName": { "type": "string" },
+                "value": { "type": "string" },
+                "offset": { "type": "integer" },
+                "size": { "type": "integer" },
+                "hasChildren": { "type": "boolean" },
+                "childCount": { "type": "integer" },
+                "isStatic": { "type": "boolean" }
+              },
+              "required": ["name", "typeName", "value"]
+            }
+          },
+          "isNull": { "type": "boolean" },
+          "hasCircularRef": { "type": "boolean" },
+          "truncated": { "type": "boolean" }
+        }
+      },
+      "error": {
+        "$ref": "#/definitions/error"
+      }
+    },
+    "required": ["success"]
+  },
+  "definitions": {
+    "error": {
+      "type": "object",
+      "properties": {
+        "code": { "type": "string" },
+        "message": { "type": "string" },
+        "details": { "type": "object" }
+      },
+      "required": ["code", "message"]
+    }
+  },
+  "examples": [
+    {
+      "description": "Inspect a customer object",
+      "request": {
+        "tool": "object_inspect",
+        "parameters": {
+          "object_ref": "customer",
+          "depth": 2
+        }
+      },
+      "response": {
+        "success": true,
+        "inspection": {
+          "address": "0x00007FF8A1234560",
+          "typeName": "MyApp.Models.Customer",
+          "size": 48,
+          "fields": [
+            {
+              "name": "_id",
+              "typeName": "System.Int32",
+              "value": "42",
+              "offset": 16,
+              "size": 4,
+              "hasChildren": false
+            },
+            {
+              "name": "_name",
+              "typeName": "System.String",
+              "value": "\"John Doe\"",
+              "offset": 24,
+              "size": 8,
+              "hasChildren": false
+            },
+            {
+              "name": "_orders",
+              "typeName": "System.Collections.Generic.List<Order>",
+              "value": "List<Order> (Count=3)",
+              "offset": 32,
+              "size": 8,
+              "hasChildren": true,
+              "childCount": 3
+            }
+          ],
+          "isNull": false,
+          "hasCircularRef": false,
+          "truncated": false
+        }
+      }
+    }
+  ]
+}

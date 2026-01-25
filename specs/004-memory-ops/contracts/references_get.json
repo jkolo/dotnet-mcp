@@ -1,0 +1,172 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "references_get",
+  "description": "Analyze object references - find what objects a target references (outbound) or what references the target (inbound)",
+  "type": "object",
+  "properties": {
+    "tool": {
+      "const": "references_get"
+    },
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "object_ref": {
+          "type": "string",
+          "description": "Object reference from variables_get or evaluate result"
+        },
+        "direction": {
+          "type": "string",
+          "description": "Reference direction: 'outbound' (objects this references), 'inbound' (objects referencing this), 'both'",
+          "enum": ["outbound", "inbound", "both"],
+          "default": "outbound"
+        },
+        "max_results": {
+          "type": "integer",
+          "description": "Maximum references to return (default: 50, max: 100)",
+          "minimum": 1,
+          "maximum": 100,
+          "default": 50
+        },
+        "include_arrays": {
+          "type": "boolean",
+          "description": "Include array element references (default: true)",
+          "default": true
+        }
+      },
+      "required": ["object_ref"]
+    }
+  },
+  "response": {
+    "type": "object",
+    "properties": {
+      "success": {
+        "type": "boolean"
+      },
+      "references": {
+        "type": "object",
+        "properties": {
+          "targetAddress": {
+            "type": "string",
+            "description": "Address of the analyzed object"
+          },
+          "targetType": {
+            "type": "string",
+            "description": "Type of the analyzed object"
+          },
+          "outbound": {
+            "type": "array",
+            "description": "Objects this object references",
+            "items": {
+              "$ref": "#/definitions/referenceInfo"
+            }
+          },
+          "inbound": {
+            "type": "array",
+            "description": "Objects referencing this object",
+            "items": {
+              "$ref": "#/definitions/referenceInfo"
+            }
+          },
+          "outboundCount": {
+            "type": "integer",
+            "description": "Total outbound references (may exceed returned list)"
+          },
+          "inboundCount": {
+            "type": "integer",
+            "description": "Total inbound references (may exceed returned list)"
+          },
+          "truncated": {
+            "type": "boolean",
+            "description": "True if results were truncated"
+          }
+        }
+      },
+      "error": {
+        "$ref": "#/definitions/error"
+      }
+    },
+    "required": ["success"]
+  },
+  "definitions": {
+    "referenceInfo": {
+      "type": "object",
+      "properties": {
+        "sourceAddress": {
+          "type": "string",
+          "description": "Address of referencing object"
+        },
+        "sourceType": {
+          "type": "string",
+          "description": "Type of referencing object"
+        },
+        "targetAddress": {
+          "type": "string",
+          "description": "Address of referenced object"
+        },
+        "targetType": {
+          "type": "string",
+          "description": "Type of referenced object"
+        },
+        "path": {
+          "type": "string",
+          "description": "Field/path from source to target (e.g., '_customer', '[0]')"
+        },
+        "referenceType": {
+          "type": "string",
+          "enum": ["Field", "ArrayElement", "StaticField", "WeakReference"]
+        }
+      },
+      "required": ["sourceAddress", "sourceType", "targetAddress", "targetType", "path"]
+    },
+    "error": {
+      "type": "object",
+      "properties": {
+        "code": { "type": "string" },
+        "message": { "type": "string" },
+        "details": { "type": "object" }
+      },
+      "required": ["code", "message"]
+    }
+  },
+  "examples": [
+    {
+      "description": "Get outbound references for an order object",
+      "request": {
+        "tool": "references_get",
+        "parameters": {
+          "object_ref": "order",
+          "direction": "outbound"
+        }
+      },
+      "response": {
+        "success": true,
+        "references": {
+          "targetAddress": "0x00007FF8A1234560",
+          "targetType": "MyApp.Models.Order",
+          "outbound": [
+            {
+              "sourceAddress": "0x00007FF8A1234560",
+              "sourceType": "MyApp.Models.Order",
+              "targetAddress": "0x00007FF8A1234680",
+              "targetType": "MyApp.Models.Customer",
+              "path": "_customer",
+              "referenceType": "Field"
+            },
+            {
+              "sourceAddress": "0x00007FF8A1234560",
+              "sourceType": "MyApp.Models.Order",
+              "targetAddress": "0x00007FF8A1234700",
+              "targetType": "System.Collections.Generic.List<OrderItem>",
+              "path": "_items",
+              "referenceType": "Field"
+            }
+          ],
+          "inbound": [],
+          "outboundCount": 2,
+          "inboundCount": 0,
+          "truncated": false
+        }
+      }
+    }
+  ]
+}

@@ -1,0 +1,168 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "layout_get",
+  "description": "Get the memory layout of a type including field offsets, sizes, and padding",
+  "type": "object",
+  "properties": {
+    "tool": {
+      "const": "layout_get"
+    },
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "type_name": {
+          "type": "string",
+          "description": "Full type name (e.g., 'MyApp.Models.Customer') or object reference to get layout of its type"
+        },
+        "include_inherited": {
+          "type": "boolean",
+          "description": "Include inherited fields from base classes (default: true)",
+          "default": true
+        },
+        "include_padding": {
+          "type": "boolean",
+          "description": "Include padding analysis between fields (default: true)",
+          "default": true
+        }
+      },
+      "required": ["type_name"]
+    }
+  },
+  "response": {
+    "type": "object",
+    "properties": {
+      "success": {
+        "type": "boolean"
+      },
+      "layout": {
+        "type": "object",
+        "properties": {
+          "typeName": {
+            "type": "string",
+            "description": "Full type name"
+          },
+          "totalSize": {
+            "type": "integer",
+            "description": "Total size in bytes (runtime size)"
+          },
+          "headerSize": {
+            "type": "integer",
+            "description": "Object header size (0 for value types)"
+          },
+          "dataSize": {
+            "type": "integer",
+            "description": "Size of fields (totalSize - headerSize)"
+          },
+          "fields": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "name": { "type": "string" },
+                "typeName": { "type": "string" },
+                "offset": { "type": "integer" },
+                "size": { "type": "integer" },
+                "alignment": { "type": "integer" },
+                "isReference": { "type": "boolean" },
+                "declaringType": { "type": "string" }
+              },
+              "required": ["name", "typeName", "offset", "size"]
+            }
+          },
+          "padding": {
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "offset": { "type": "integer" },
+                "size": { "type": "integer" },
+                "reason": { "type": "string" }
+              },
+              "required": ["offset", "size"]
+            }
+          },
+          "isValueType": {
+            "type": "boolean",
+            "description": "True for struct, false for class"
+          },
+          "baseType": {
+            "type": "string",
+            "description": "Base type name if any"
+          }
+        }
+      },
+      "error": {
+        "$ref": "#/definitions/error"
+      }
+    },
+    "required": ["success"]
+  },
+  "definitions": {
+    "error": {
+      "type": "object",
+      "properties": {
+        "code": { "type": "string" },
+        "message": { "type": "string" },
+        "details": { "type": "object" }
+      },
+      "required": ["code", "message"]
+    }
+  },
+  "examples": [
+    {
+      "description": "Get memory layout of Customer class",
+      "request": {
+        "tool": "layout_get",
+        "parameters": {
+          "type_name": "MyApp.Models.Customer",
+          "include_inherited": true,
+          "include_padding": true
+        }
+      },
+      "response": {
+        "success": true,
+        "layout": {
+          "typeName": "MyApp.Models.Customer",
+          "totalSize": 48,
+          "headerSize": 16,
+          "dataSize": 32,
+          "fields": [
+            {
+              "name": "_id",
+              "typeName": "System.Int32",
+              "offset": 0,
+              "size": 4,
+              "alignment": 4,
+              "isReference": false
+            },
+            {
+              "name": "_name",
+              "typeName": "System.String",
+              "offset": 8,
+              "size": 8,
+              "alignment": 8,
+              "isReference": true
+            },
+            {
+              "name": "_balance",
+              "typeName": "System.Decimal",
+              "offset": 16,
+              "size": 16,
+              "alignment": 8,
+              "isReference": false
+            }
+          ],
+          "padding": [
+            {
+              "offset": 4,
+              "size": 4,
+              "reason": "Alignment for System.String (8-byte aligned)"
+            }
+          ],
+          "isValueType": false,
+          "baseType": "System.Object"
+        }
+      }
+    }
+  ]
+}

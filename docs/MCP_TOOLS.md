@@ -776,6 +776,358 @@ Complex expression:
 
 ---
 
+## Memory Inspection
+
+### object_inspect
+
+Inspect a heap object's contents including all fields.
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `object_ref` | string | Yes | Object reference (variable name or expression, e.g., 'customer', 'this._orders') |
+| `depth` | integer | No | Maximum depth for nested object expansion (1-10, default: 1) |
+| `thread_id` | integer | No | Thread ID (default: current thread) |
+| `frame_index` | integer | No | Frame index (0 = top of stack, default: 0) |
+
+**Example:**
+```json
+{
+  "object_ref": "customer",
+  "depth": 2
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "inspection": {
+    "address": "0x00007FF8A1234560",
+    "typeName": "MyApp.Models.Customer",
+    "size": 48,
+    "fields": [
+      {
+        "name": "Id",
+        "typeName": "System.Int32",
+        "value": "42",
+        "offset": 8,
+        "size": 4,
+        "hasChildren": false,
+        "childCount": 0
+      },
+      {
+        "name": "Name",
+        "typeName": "System.String",
+        "value": "\"John Doe\"",
+        "offset": 16,
+        "size": 8,
+        "hasChildren": true,
+        "childCount": 8
+      },
+      {
+        "name": "Orders",
+        "typeName": "System.Collections.Generic.List`1[MyApp.Models.Order]",
+        "value": "Count = 3",
+        "offset": 24,
+        "size": 8,
+        "hasChildren": true,
+        "childCount": 3
+      }
+    ],
+    "isNull": false,
+    "hasCircularRef": false,
+    "truncated": false
+  }
+}
+```
+
+**Response (null object):**
+```json
+{
+  "success": true,
+  "inspection": {
+    "isNull": true,
+    "typeName": "MyApp.Models.Customer"
+  }
+}
+```
+
+**Errors:**
+- `NOT_PAUSED` — Process must be paused
+- `INVALID_REFERENCE` — Cannot resolve object reference
+- `DEPTH_EXCEEDED` — Expansion depth exceeded limit
+
+---
+
+### memory_read
+
+Read raw memory bytes from the debuggee process.
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `address` | string | Yes | Memory address in hex (e.g., '0x00007FF8A1234560') or decimal |
+| `size` | integer | No | Number of bytes to read (default: 256, max: 65536) |
+| `format` | string | No | Output format: 'hex', 'hex_ascii' (default), 'raw' |
+
+**Example:**
+```json
+{
+  "address": "0x00007FF8A1234560",
+  "size": 64,
+  "format": "hex_ascii"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "memory": {
+    "address": "0x00007FF8A1234560",
+    "requestedSize": 64,
+    "actualSize": 64,
+    "bytes": "48 65 6C 6C 6F 20 57 6F 72 6C 64 21 00 00 00 00\n00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00\n00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00\n00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00",
+    "ascii": "Hello World!....\n................\n................\n................"
+  }
+}
+```
+
+**Response (partial read):**
+```json
+{
+  "success": true,
+  "memory": {
+    "address": "0x00007FFFFFFFFFE0",
+    "requestedSize": 64,
+    "actualSize": 32,
+    "bytes": "48 65 6C 6C 6F 00 00 00 00 00 00 00 00 00 00 00\n00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00",
+    "ascii": "Hello...........\n................",
+    "error": "Partial read: only 32 of 64 bytes readable"
+  }
+}
+```
+
+**Errors:**
+- `NOT_PAUSED` — Process must be paused
+- `INVALID_ADDRESS` — Memory address is not accessible
+- `SIZE_EXCEEDED` — Requested size exceeds 64KB limit
+
+---
+
+### references_get
+
+Analyze object references - find what objects a target references (outbound).
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `object_ref` | string | Yes | Object reference (variable name or expression) |
+| `direction` | string | No | Reference direction: 'outbound' (default), 'inbound', 'both'. Note: inbound not yet implemented |
+| `max_results` | integer | No | Maximum references to return (default: 50, max: 100) |
+| `include_arrays` | boolean | No | Include array element references (default: true) |
+| `thread_id` | integer | No | Thread ID (default: current thread) |
+| `frame_index` | integer | No | Frame index (0 = top of stack, default: 0) |
+
+**Example:**
+```json
+{
+  "object_ref": "orderManager",
+  "direction": "outbound",
+  "max_results": 50,
+  "include_arrays": true
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "references": {
+    "targetAddress": "0x00007FF8A1234560",
+    "targetType": "MyApp.Services.OrderManager",
+    "outbound": [
+      {
+        "sourceAddress": "0x00007FF8A1234560",
+        "sourceType": "MyApp.Services.OrderManager",
+        "targetAddress": "0x00007FF8A1235000",
+        "targetType": "MyApp.Repositories.OrderRepository",
+        "path": "_repository",
+        "referenceType": "Field"
+      },
+      {
+        "sourceAddress": "0x00007FF8A1234560",
+        "sourceType": "MyApp.Services.OrderManager",
+        "targetAddress": "0x00007FF8A1236000",
+        "targetType": "Microsoft.Extensions.Logging.ILogger`1[OrderManager]",
+        "path": "_logger",
+        "referenceType": "Field"
+      },
+      {
+        "sourceAddress": "0x00007FF8A1234560",
+        "sourceType": "MyApp.Services.OrderManager",
+        "targetAddress": "0x00007FF8A1237000",
+        "targetType": "MyApp.Models.Order",
+        "path": "_orders[0]",
+        "referenceType": "ArrayElement"
+      }
+    ],
+    "outboundCount": 3,
+    "truncated": false
+  }
+}
+```
+
+**Response (with inbound request - not yet implemented):**
+```json
+{
+  "success": true,
+  "references": {
+    "targetAddress": "0x00007FF8A1234560",
+    "targetType": "MyApp.Services.OrderManager",
+    "outbound": [...],
+    "outboundCount": 3,
+    "inbound": [],
+    "inboundCount": 0,
+    "inboundNote": "Inbound reference analysis is not yet implemented",
+    "truncated": false
+  }
+}
+```
+
+**Errors:**
+- `NOT_PAUSED` — Process must be paused
+- `INVALID_REFERENCE` — Cannot resolve object reference
+
+---
+
+### layout_get
+
+Get the memory layout of a type including field offsets, sizes, and padding.
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `type_name` | string | Yes | Full type name (e.g., 'MyApp.Models.Customer') or object reference |
+| `include_inherited` | boolean | No | Include inherited fields from base classes (default: true) |
+| `include_padding` | boolean | No | Include padding analysis between fields (default: true) |
+| `thread_id` | integer | No | Thread ID (default: current thread) |
+| `frame_index` | integer | No | Frame index (0 = top of stack, default: 0) |
+
+**Example:**
+```json
+{
+  "type_name": "MyApp.Models.Customer",
+  "include_inherited": true,
+  "include_padding": true
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "layout": {
+    "typeName": "MyApp.Models.Customer",
+    "totalSize": 48,
+    "headerSize": 16,
+    "dataSize": 32,
+    "baseType": "System.Object",
+    "isValueType": false,
+    "fields": [
+      {
+        "name": "Id",
+        "typeName": "System.Int32",
+        "offset": 16,
+        "size": 4,
+        "alignment": 4,
+        "isReference": false,
+        "declaringType": "MyApp.Models.Customer"
+      },
+      {
+        "name": "IsActive",
+        "typeName": "System.Boolean",
+        "offset": 20,
+        "size": 1,
+        "alignment": 1,
+        "isReference": false,
+        "declaringType": "MyApp.Models.Customer"
+      },
+      {
+        "name": "Name",
+        "typeName": "System.String",
+        "offset": 24,
+        "size": 8,
+        "alignment": 8,
+        "isReference": true,
+        "declaringType": "MyApp.Models.Customer"
+      },
+      {
+        "name": "Email",
+        "typeName": "System.String",
+        "offset": 32,
+        "size": 8,
+        "alignment": 8,
+        "isReference": true,
+        "declaringType": "MyApp.Models.Customer"
+      },
+      {
+        "name": "Orders",
+        "typeName": "System.Collections.Generic.List`1[MyApp.Models.Order]",
+        "offset": 40,
+        "size": 8,
+        "alignment": 8,
+        "isReference": true,
+        "declaringType": "MyApp.Models.Customer"
+      }
+    ],
+    "padding": [
+      {
+        "offset": 21,
+        "size": 3,
+        "reason": "Alignment padding before Name"
+      }
+    ]
+  }
+}
+```
+
+**Response (value type):**
+```json
+{
+  "success": true,
+  "layout": {
+    "typeName": "System.DateTime",
+    "totalSize": 8,
+    "headerSize": 0,
+    "dataSize": 8,
+    "isValueType": true,
+    "fields": [
+      {
+        "name": "_dateData",
+        "typeName": "System.UInt64",
+        "offset": 0,
+        "size": 8,
+        "alignment": 8,
+        "isReference": false,
+        "declaringType": "System.DateTime"
+      }
+    ]
+  }
+}
+```
+
+**Errors:**
+- `NOT_PAUSED` — Process must be paused
+- `TYPE_NOT_FOUND` — Cannot find type with given name
+
+---
+
 ## Error Responses
 
 All tools may return errors in this format:
@@ -808,3 +1160,10 @@ All tools may return errors in this format:
 | `VARIABLES_FAILED` | Variable inspection failed |
 | `INVALID_PARAMETER` | Invalid parameter value |
 | `INVALID_CONDITION` | Condition expression has syntax error |
+| `INVALID_REFERENCE` | Cannot resolve object reference |
+| `NULL_REFERENCE` | Object reference is null |
+| `INVALID_ADDRESS` | Memory address is not accessible |
+| `MEMORY_READ_FAILED` | Failed to read memory at address |
+| `SIZE_EXCEEDED` | Requested size exceeds limit |
+| `DEPTH_EXCEEDED` | Object inspection depth exceeded limit |
+| `TYPE_NOT_FOUND` | Cannot find type with given name |

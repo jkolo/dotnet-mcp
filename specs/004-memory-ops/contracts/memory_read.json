@@ -1,0 +1,110 @@
+{
+  "$schema": "http://json-schema.org/draft-07/schema#",
+  "title": "memory_read",
+  "description": "Read raw bytes from process memory at a specified address",
+  "type": "object",
+  "properties": {
+    "tool": {
+      "const": "memory_read"
+    },
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "address": {
+          "type": "string",
+          "description": "Memory address in hex (e.g., '0x00007FF8A1234560') or decimal"
+        },
+        "size": {
+          "type": "integer",
+          "description": "Number of bytes to read (default: 256, max: 65536)",
+          "minimum": 1,
+          "maximum": 65536,
+          "default": 256
+        },
+        "format": {
+          "type": "string",
+          "description": "Output format: 'hex' (default), 'hex_ascii', 'raw'",
+          "enum": ["hex", "hex_ascii", "raw"],
+          "default": "hex_ascii"
+        }
+      },
+      "required": ["address"]
+    }
+  },
+  "response": {
+    "type": "object",
+    "properties": {
+      "success": {
+        "type": "boolean"
+      },
+      "memory": {
+        "type": "object",
+        "properties": {
+          "address": {
+            "type": "string",
+            "description": "Start address in hex"
+          },
+          "requestedSize": {
+            "type": "integer",
+            "description": "Bytes requested"
+          },
+          "actualSize": {
+            "type": "integer",
+            "description": "Bytes actually read"
+          },
+          "bytes": {
+            "type": "string",
+            "description": "Hex dump of bytes"
+          },
+          "ascii": {
+            "type": "string",
+            "description": "ASCII representation (if format includes ascii)"
+          },
+          "error": {
+            "type": "string",
+            "description": "Warning if partial read"
+          }
+        },
+        "required": ["address", "requestedSize", "actualSize", "bytes"]
+      },
+      "error": {
+        "$ref": "#/definitions/error"
+      }
+    },
+    "required": ["success"]
+  },
+  "definitions": {
+    "error": {
+      "type": "object",
+      "properties": {
+        "code": { "type": "string" },
+        "message": { "type": "string" },
+        "details": { "type": "object" }
+      },
+      "required": ["code", "message"]
+    }
+  },
+  "examples": [
+    {
+      "description": "Read 64 bytes from an address",
+      "request": {
+        "tool": "memory_read",
+        "parameters": {
+          "address": "0x00007FF8A1234560",
+          "size": 64,
+          "format": "hex_ascii"
+        }
+      },
+      "response": {
+        "success": true,
+        "memory": {
+          "address": "0x00007FF8A1234560",
+          "requestedSize": 64,
+          "actualSize": 64,
+          "bytes": "48 65 6C 6C 6F 20 57 6F 72 6C 64 21 00 00 00 00\n00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00\n00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00\n00 00 00 00 00 00 00 00 00 00 00 00 00 00 00 00",
+          "ascii": "Hello World!....\n................\n................\n................"
+        }
+      }
+    }
+  ]
+}

@@ -1,5 +1,6 @@
 using DotnetMcp.Models;
 using DotnetMcp.Models.Inspection;
+using DotnetMcp.Models.Memory;
 
 namespace DotnetMcp.Services;
 
@@ -190,6 +191,76 @@ public interface IProcessDebugger
         int? threadId = null,
         int frameIndex = 0,
         int timeoutMs = 5000,
+        CancellationToken cancellationToken = default);
+
+    // Memory inspection operations
+
+    /// <summary>
+    /// Inspects a heap object's contents including all fields.
+    /// </summary>
+    /// <param name="objectRef">Object reference (variable name or expression result).</param>
+    /// <param name="depth">Maximum depth for nested object expansion (default: 1).</param>
+    /// <param name="threadId">Thread context (null = current thread).</param>
+    /// <param name="frameIndex">Stack frame context (0 = top).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Object inspection result with fields and values.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when not attached or not paused.</exception>
+    Task<ObjectInspection> InspectObjectAsync(
+        string objectRef,
+        int depth = 1,
+        int? threadId = null,
+        int frameIndex = 0,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Reads raw memory bytes from the debuggee process.
+    /// </summary>
+    /// <param name="address">Memory address (hex string or decimal).</param>
+    /// <param name="size">Number of bytes to read (max 65536).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Memory region with bytes and ASCII representation.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when not attached or not paused.</exception>
+    Task<MemoryRegion> ReadMemoryAsync(
+        string address,
+        int size = 256,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets outbound object references (objects this object references).
+    /// </summary>
+    /// <param name="objectRef">Object reference to analyze.</param>
+    /// <param name="includeArrays">Include array element references (default: true).</param>
+    /// <param name="maxResults">Maximum references to return (max: 100).</param>
+    /// <param name="threadId">Thread context (null = current thread).</param>
+    /// <param name="frameIndex">Stack frame context (0 = top).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Reference analysis result.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when not attached or not paused.</exception>
+    Task<ReferencesResult> GetOutboundReferencesAsync(
+        string objectRef,
+        bool includeArrays = true,
+        int maxResults = 50,
+        int? threadId = null,
+        int frameIndex = 0,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets the memory layout of a type including field offsets and padding.
+    /// </summary>
+    /// <param name="typeName">Full type name or object reference.</param>
+    /// <param name="includeInherited">Include inherited fields (default: true).</param>
+    /// <param name="includePadding">Include padding analysis (default: true).</param>
+    /// <param name="threadId">Thread context (null = current thread).</param>
+    /// <param name="frameIndex">Stack frame context (0 = top).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Type layout with fields, offsets, and padding.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when not attached or not paused.</exception>
+    Task<TypeLayout> GetTypeLayoutAsync(
+        string typeName,
+        bool includeInherited = true,
+        bool includePadding = true,
+        int? threadId = null,
+        int frameIndex = 0,
         CancellationToken cancellationToken = default);
 }
 

@@ -435,4 +435,102 @@ public sealed class DebugSessionManager : IDebugSessionManager
 
         return await _processDebugger.EvaluateAsync(expression, threadId, frameIndex, timeoutMs, cancellationToken);
     }
+
+    // Memory inspection operations
+
+    /// <inheritdoc />
+    public async Task<Models.Memory.ObjectInspection> InspectObjectAsync(
+        string objectRef,
+        int depth = 1,
+        int? threadId = null,
+        int frameIndex = 0,
+        CancellationToken cancellationToken = default)
+    {
+        lock (_lock)
+        {
+            if (_currentSession == null)
+            {
+                throw new InvalidOperationException("No active debug session");
+            }
+
+            if (_currentSession.State != SessionState.Paused)
+            {
+                throw new InvalidOperationException($"Process is not paused (current state: {_currentSession.State})");
+            }
+        }
+
+        return await _processDebugger.InspectObjectAsync(objectRef, depth, threadId, frameIndex, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task<Models.Memory.MemoryRegion> ReadMemoryAsync(
+        string address,
+        int size = 256,
+        CancellationToken cancellationToken = default)
+    {
+        lock (_lock)
+        {
+            if (_currentSession == null)
+            {
+                throw new InvalidOperationException("No active debug session");
+            }
+
+            if (_currentSession.State != SessionState.Paused)
+            {
+                throw new InvalidOperationException($"Process is not paused (current state: {_currentSession.State})");
+            }
+        }
+
+        return await _processDebugger.ReadMemoryAsync(address, size, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task<Models.Memory.ReferencesResult> GetOutboundReferencesAsync(
+        string objectRef,
+        bool includeArrays = true,
+        int maxResults = 50,
+        int? threadId = null,
+        int frameIndex = 0,
+        CancellationToken cancellationToken = default)
+    {
+        lock (_lock)
+        {
+            if (_currentSession == null)
+            {
+                throw new InvalidOperationException("No active debug session");
+            }
+
+            if (_currentSession.State != SessionState.Paused)
+            {
+                throw new InvalidOperationException($"Process is not paused (current state: {_currentSession.State})");
+            }
+        }
+
+        return await _processDebugger.GetOutboundReferencesAsync(objectRef, includeArrays, maxResults, threadId, frameIndex, cancellationToken);
+    }
+
+    /// <inheritdoc />
+    public async Task<Models.Memory.TypeLayout> GetTypeLayoutAsync(
+        string typeName,
+        bool includeInherited = true,
+        bool includePadding = true,
+        int? threadId = null,
+        int frameIndex = 0,
+        CancellationToken cancellationToken = default)
+    {
+        lock (_lock)
+        {
+            if (_currentSession == null)
+            {
+                throw new InvalidOperationException("No active debug session");
+            }
+
+            if (_currentSession.State != SessionState.Paused)
+            {
+                throw new InvalidOperationException($"Process is not paused (current state: {_currentSession.State})");
+            }
+        }
+
+        return await _processDebugger.GetTypeLayoutAsync(typeName, includeInherited, includePadding, threadId, frameIndex, cancellationToken);
+    }
 }

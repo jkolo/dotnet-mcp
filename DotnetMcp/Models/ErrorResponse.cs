@@ -102,4 +102,27 @@ public static class ErrorCodes
 
     /// <summary>Variable inspection failed.</summary>
     public const string VariablesFailed = "VARIABLES_FAILED";
+
+    // Memory inspection error codes
+
+    /// <summary>Object reference is invalid or no longer valid.</summary>
+    public const string InvalidReference = "INVALID_REFERENCE";
+
+    /// <summary>Cannot inspect null reference.</summary>
+    public const string NullReference = "NULL_REFERENCE";
+
+    /// <summary>Memory address is not accessible.</summary>
+    public const string InvalidAddress = "INVALID_ADDRESS";
+
+    /// <summary>Memory read operation failed.</summary>
+    public const string MemoryReadFailed = "MEMORY_READ_FAILED";
+
+    /// <summary>Requested size exceeds maximum limit (64KB).</summary>
+    public const string SizeExceeded = "SIZE_EXCEEDED";
+
+    /// <summary>Object expansion depth exceeds limit.</summary>
+    public const string DepthExceeded = "DEPTH_EXCEEDED";
+
+    /// <summary>Type not found in loaded modules.</summary>
+    public const string TypeNotFound = "TYPE_NOT_FOUND";
 }
