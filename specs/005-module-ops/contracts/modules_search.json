@@ -1,0 +1,208 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "modules_search",
+  "description": "Search for types or methods across all loaded modules",
+  "type": "object",
+  "properties": {
+    "tool": {
+      "const": "modules_search"
+    },
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "pattern": {
+          "type": "string",
+          "description": "Search pattern (supports * wildcard, e.g., '*Controller', 'Get*')"
+        },
+        "search_type": {
+          "type": "string",
+          "enum": ["types", "methods", "both"],
+          "description": "What to search for (default: both)",
+          "default": "both"
+        },
+        "module_filter": {
+          "type": "string",
+          "description": "Limit search to specific module (supports * wildcard)"
+        },
+        "case_sensitive": {
+          "type": "boolean",
+          "description": "Case-sensitive matching (default: false)",
+          "default": false
+        },
+        "max_results": {
+          "type": "integer",
+          "description": "Maximum results to return (default: 50, max: 100)",
+          "default": 50,
+          "minimum": 1,
+          "maximum": 100
+        }
+      },
+      "required": ["pattern"],
+      "additionalProperties": false
+    }
+  },
+  "required": ["tool", "parameters"],
+  "response": {
+    "type": "object",
+    "properties": {
+      "success": {
+        "type": "boolean"
+      },
+      "query": {
+        "type": "string",
+        "description": "The search pattern used"
+      },
+      "searchType": {
+        "type": "string",
+        "enum": ["types", "methods", "both"]
+      },
+      "types": {
+        "type": "array",
+        "description": "Matching types",
+        "items": {
+          "type": "object",
+          "properties": {
+            "fullName": { "type": "string" },
+            "name": { "type": "string" },
+            "namespace": { "type": "string" },
+            "kind": { "type": "string" },
+            "moduleName": { "type": "string" }
+          },
+          "required": ["fullName", "name", "moduleName"]
+        }
+      },
+      "methods": {
+        "type": "array",
+        "description": "Matching methods",
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": { "type": "string" },
+            "signature": { "type": "string" },
+            "declaringType": { "type": "string" },
+            "moduleName": { "type": "string" },
+            "visibility": { "type": "string" },
+            "isStatic": { "type": "boolean" }
+          },
+          "required": ["name", "signature", "declaringType", "moduleName"]
+        }
+      },
+      "totalMatches": {
+        "type": "integer",
+        "description": "Total matches found"
+      },
+      "returnedMatches": {
+        "type": "integer",
+        "description": "Matches returned (may be limited)"
+      },
+      "truncated": {
+        "type": "boolean",
+        "description": "True if results were truncated"
+      },
+      "error": {
+        "$ref": "#/$defs/error"
+      }
+    },
+    "required": ["success"]
+  },
+  "$defs": {
+    "error": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "enum": ["NO_SESSION", "INVALID_PATTERN", "SEARCH_FAILED"]
+        },
+        "message": {
+          "type": "string"
+        },
+        "details": {
+          "type": "object"
+        }
+      },
+      "required": ["code", "message"]
+    }
+  },
+  "examples": [
+    {
+      "request": {
+        "tool": "modules_search",
+        "parameters": {
+          "pattern": "*Controller",
+          "search_type": "types"
+        }
+      },
+      "response": {
+        "success": true,
+        "query": "*Controller",
+        "searchType": "types",
+        "types": [
+          {
+            "fullName": "MyApp.Controllers.CustomerController",
+            "name": "CustomerController",
+            "namespace": "MyApp.Controllers",
+            "kind": "class",
+            "moduleName": "MyApp"
+          },
+          {
+            "fullName": "MyApp.Controllers.OrderController",
+            "name": "OrderController",
+            "namespace": "MyApp.Controllers",
+            "kind": "class",
+            "moduleName": "MyApp"
+          }
+        ],
+        "methods": [],
+        "totalMatches": 2,
+        "returnedMatches": 2,
+        "truncated": false
+      }
+    },
+    {
+      "request": {
+        "tool": "modules_search",
+        "parameters": {
+          "pattern": "Get*",
+          "search_type": "methods",
+          "module_filter": "MyApp",
+          "max_results": 10
+        }
+      },
+      "response": {
+        "success": true,
+        "query": "Get*",
+        "searchType": "methods",
+        "types": [],
+        "methods": [
+          {
+            "name": "GetCustomer",
+            "signature": "Customer GetCustomer(int id)",
+            "declaringType": "MyApp.Services.CustomerService",
+            "moduleName": "MyApp",
+            "visibility": "public",
+            "isStatic": false
+          },
+          {
+            "name": "GetOrders",
+            "signature": "List<Order> GetOrders(int customerId)",
+            "declaringType": "MyApp.Services.OrderService",
+            "moduleName": "MyApp",
+            "visibility": "public",
+            "isStatic": false
+          },
+          {
+            "name": "GetById",
+            "signature": "T GetById<T>(int id)",
+            "declaringType": "MyApp.Repositories.Repository<T>",
+            "moduleName": "MyApp",
+            "visibility": "public",
+            "isStatic": false
+          }
+        ],
+        "totalMatches": 15,
+        "returnedMatches": 10,
+        "truncated": true
+      }
+    }
+  ]
+}

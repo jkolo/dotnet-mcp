@@ -1,0 +1,222 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "types_get",
+  "description": "Browse types defined in a module, organized by namespace",
+  "type": "object",
+  "properties": {
+    "tool": {
+      "const": "types_get"
+    },
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "module_name": {
+          "type": "string",
+          "description": "Module name to browse types in (required)"
+        },
+        "namespace": {
+          "type": "string",
+          "description": "Filter to specific namespace (supports * wildcard)"
+        },
+        "kind": {
+          "type": "string",
+          "enum": ["class", "interface", "struct", "enum", "delegate", "all"],
+          "description": "Filter by type kind (default: all)",
+          "default": "all"
+        },
+        "visibility": {
+          "type": "string",
+          "enum": ["public", "internal", "all"],
+          "description": "Filter by visibility (default: all)",
+          "default": "all"
+        },
+        "max_results": {
+          "type": "integer",
+          "description": "Maximum types to return (default: 100, max: 500)",
+          "default": 100,
+          "minimum": 1,
+          "maximum": 500
+        },
+        "continuation_token": {
+          "type": "string",
+          "description": "Token for fetching next page of results"
+        }
+      },
+      "required": ["module_name"],
+      "additionalProperties": false
+    }
+  },
+  "required": ["tool", "parameters"],
+  "response": {
+    "type": "object",
+    "properties": {
+      "success": {
+        "type": "boolean"
+      },
+      "moduleName": {
+        "type": "string",
+        "description": "Module that was queried"
+      },
+      "types": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "fullName": {
+              "type": "string",
+              "description": "Full type name including namespace"
+            },
+            "name": {
+              "type": "string",
+              "description": "Simple type name"
+            },
+            "namespace": {
+              "type": "string",
+              "description": "Namespace"
+            },
+            "kind": {
+              "type": "string",
+              "enum": ["class", "interface", "struct", "enum", "delegate"]
+            },
+            "visibility": {
+              "type": "string",
+              "enum": ["public", "internal", "private", "protected"]
+            },
+            "isGeneric": {
+              "type": "boolean",
+              "description": "True if type has generic parameters"
+            },
+            "genericParameters": {
+              "type": "array",
+              "items": { "type": "string" },
+              "description": "Generic type parameter names"
+            },
+            "isNested": {
+              "type": "boolean",
+              "description": "True if nested inside another type"
+            },
+            "declaringType": {
+              "type": ["string", "null"],
+              "description": "Parent type if nested"
+            },
+            "baseType": {
+              "type": ["string", "null"],
+              "description": "Base class name"
+            }
+          },
+          "required": ["fullName", "name", "kind", "visibility"]
+        }
+      },
+      "namespaces": {
+        "type": "array",
+        "description": "Namespace hierarchy in the module",
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string"
+            },
+            "fullName": {
+              "type": "string"
+            },
+            "typeCount": {
+              "type": "integer"
+            }
+          }
+        }
+      },
+      "totalCount": {
+        "type": "integer",
+        "description": "Total types matching criteria"
+      },
+      "returnedCount": {
+        "type": "integer",
+        "description": "Types returned in this response"
+      },
+      "truncated": {
+        "type": "boolean",
+        "description": "True if more results available"
+      },
+      "continuationToken": {
+        "type": ["string", "null"],
+        "description": "Token to get next page"
+      },
+      "error": {
+        "$ref": "#/$defs/error"
+      }
+    },
+    "required": ["success"]
+  },
+  "$defs": {
+    "error": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "enum": ["NO_SESSION", "MODULE_NOT_FOUND", "METADATA_ERROR"]
+        },
+        "message": {
+          "type": "string"
+        },
+        "details": {
+          "type": "object"
+        }
+      },
+      "required": ["code", "message"]
+    }
+  },
+  "examples": [
+    {
+      "request": {
+        "tool": "types_get",
+        "parameters": {
+          "module_name": "MyApp",
+          "namespace": "MyApp.Models"
+        }
+      },
+      "response": {
+        "success": true,
+        "moduleName": "MyApp",
+        "types": [
+          {
+            "fullName": "MyApp.Models.Customer",
+            "name": "Customer",
+            "namespace": "MyApp.Models",
+            "kind": "class",
+            "visibility": "public",
+            "isGeneric": false,
+            "isNested": false,
+            "baseType": "System.Object"
+          },
+          {
+            "fullName": "MyApp.Models.Order",
+            "name": "Order",
+            "namespace": "MyApp.Models",
+            "kind": "class",
+            "visibility": "public",
+            "isGeneric": false,
+            "isNested": false,
+            "baseType": "System.Object"
+          },
+          {
+            "fullName": "MyApp.Models.OrderStatus",
+            "name": "OrderStatus",
+            "namespace": "MyApp.Models",
+            "kind": "enum",
+            "visibility": "public",
+            "isGeneric": false,
+            "isNested": false,
+            "baseType": "System.Enum"
+          }
+        ],
+        "namespaces": [
+          { "name": "Models", "fullName": "MyApp.Models", "typeCount": 3 }
+        ],
+        "totalCount": 3,
+        "returnedCount": 3,
+        "truncated": false,
+        "continuationToken": null
+      }
+    }
+  ]
+}

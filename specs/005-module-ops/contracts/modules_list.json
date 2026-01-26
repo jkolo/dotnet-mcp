@@ -1,0 +1,175 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "modules_list",
+  "description": "List all loaded modules (assemblies) in the debug session",
+  "type": "object",
+  "properties": {
+    "tool": {
+      "const": "modules_list"
+    },
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "include_system": {
+          "type": "boolean",
+          "description": "Include system/framework assemblies (default: true)",
+          "default": true
+        },
+        "name_filter": {
+          "type": "string",
+          "description": "Filter modules by name pattern (supports * wildcard)"
+        }
+      },
+      "additionalProperties": false
+    }
+  },
+  "required": ["tool"],
+  "response": {
+    "type": "object",
+    "properties": {
+      "success": {
+        "type": "boolean"
+      },
+      "modules": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": {
+              "type": "string",
+              "description": "Assembly simple name"
+            },
+            "fullName": {
+              "type": "string",
+              "description": "Full assembly name with version/culture/key"
+            },
+            "path": {
+              "type": ["string", "null"],
+              "description": "File path (null for in-memory modules)"
+            },
+            "version": {
+              "type": "string",
+              "description": "Assembly version"
+            },
+            "isManaged": {
+              "type": "boolean",
+              "description": "True for .NET assemblies"
+            },
+            "isDynamic": {
+              "type": "boolean",
+              "description": "True for dynamically generated assemblies"
+            },
+            "hasSymbols": {
+              "type": "boolean",
+              "description": "True if symbols (PDB) are loaded"
+            },
+            "moduleId": {
+              "type": "string",
+              "description": "Unique module identifier"
+            },
+            "baseAddress": {
+              "type": "string",
+              "description": "Module base address in hex"
+            },
+            "size": {
+              "type": "integer",
+              "description": "Module size in bytes"
+            }
+          },
+          "required": ["name", "fullName", "isManaged", "moduleId"]
+        }
+      },
+      "count": {
+        "type": "integer",
+        "description": "Number of modules returned"
+      },
+      "error": {
+        "$ref": "#/$defs/error"
+      }
+    },
+    "required": ["success"]
+  },
+  "$defs": {
+    "error": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "enum": ["NO_SESSION", "ENUMERATION_FAILED"]
+        },
+        "message": {
+          "type": "string"
+        },
+        "details": {
+          "type": "object"
+        }
+      },
+      "required": ["code", "message"]
+    }
+  },
+  "examples": [
+    {
+      "request": {
+        "tool": "modules_list",
+        "parameters": {}
+      },
+      "response": {
+        "success": true,
+        "modules": [
+          {
+            "name": "MyApp",
+            "fullName": "MyApp, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+            "path": "/app/MyApp.dll",
+            "version": "1.0.0.0",
+            "isManaged": true,
+            "isDynamic": false,
+            "hasSymbols": true,
+            "moduleId": "mod-12345",
+            "baseAddress": "0x00007FF8A1230000",
+            "size": 45056
+          },
+          {
+            "name": "System.Private.CoreLib",
+            "fullName": "System.Private.CoreLib, Version=8.0.0.0, Culture=neutral, PublicKeyToken=7cec85d7bea7798e",
+            "path": "/usr/share/dotnet/shared/Microsoft.NETCore.App/8.0.1/System.Private.CoreLib.dll",
+            "version": "8.0.0.0",
+            "isManaged": true,
+            "isDynamic": false,
+            "hasSymbols": false,
+            "moduleId": "mod-12346",
+            "baseAddress": "0x00007FF8A0000000",
+            "size": 12582912
+          }
+        ],
+        "count": 2
+      }
+    },
+    {
+      "request": {
+        "tool": "modules_list",
+        "parameters": {
+          "include_system": false,
+          "name_filter": "MyApp*"
+        }
+      },
+      "response": {
+        "success": true,
+        "modules": [
+          {
+            "name": "MyApp",
+            "fullName": "MyApp, Version=1.0.0.0, Culture=neutral, PublicKeyToken=null",
+            "path": "/app/MyApp.dll",
+            "version": "1.0.0.0",
+            "isManaged": true,
+            "isDynamic": false,
+            "hasSymbols": true,
+            "moduleId": "mod-12345",
+            "baseAddress": "0x00007FF8A1230000",
+            "size": 45056
+          }
+        ],
+        "count": 1
+      }
+    }
+  ]
+}

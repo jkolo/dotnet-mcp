@@ -1,5 +1,9 @@
+using System.Collections.Immutable;
 using System.Diagnostics;
 using System.Globalization;
+using System.Reflection;
+using System.Reflection.Metadata;
+using System.Reflection.PortableExecutable;
 using System.Runtime.InteropServices;
 using System.Text;
 using ClrDebug;
@@ -3658,7 +3662,7 @@ public sealed class ProcessDebugger : IProcessDebugger, IDisposable
     }
 
     /// <inheritdoc />
-    public Task<TypeLayout> GetTypeLayoutAsync(
+    public Task<Models.Memory.TypeLayout> GetTypeLayoutAsync(
         string typeName,
         bool includeInherited = true,
         bool includePadding = true,
@@ -3766,7 +3770,7 @@ public sealed class ProcessDebugger : IProcessDebugger, IDisposable
         return null;
     }
 
-    private TypeLayout GetTypeLayoutFromDebugType(CorDebugType debugType, string typeName, bool includeInherited, bool includePadding)
+    private Models.Memory.TypeLayout GetTypeLayoutFromDebugType(CorDebugType debugType, string typeName, bool includeInherited, bool includePadding)
     {
         var fields = new List<LayoutField>();
         var padding = new List<PaddingRegion>();
@@ -3870,7 +3874,7 @@ public sealed class ProcessDebugger : IProcessDebugger, IDisposable
             _logger.LogDebug(ex, "Error getting type layout for '{TypeName}'", typeName);
         }
 
-        return new TypeLayout
+        return new Models.Memory.TypeLayout
         {
             TypeName = typeName,
             TotalSize = totalSize,
@@ -3927,6 +3931,1774 @@ public sealed class ProcessDebugger : IProcessDebugger, IDisposable
             "System.IntPtr" or "System.UIntPtr" => false,
             _ => true
         };
+    }
+
+    #endregion
+
+    #region Module Inspection Operations
+
+    /// <inheritdoc />
+    public Task<IReadOnlyList<Models.Modules.ModuleInfo>> GetModulesAsync(
+        bool includeSystem = true,
+        string? nameFilter = null,
+        CancellationToken cancellationToken = default)
+    {
+        return Task.Run(() =>
+        {
+            lock (_lock)
+            {
+                if (_process == null)
+                {
+                    throw new InvalidOperationException("Cannot get modules: debugger is not attached to any process");
+                }
+
+                _logger.LogDebug("Getting modules (includeSystem={IncludeSystem}, nameFilter={NameFilter})",
+                    includeSystem, nameFilter);
+
+                var modules = new List<Models.Modules.ModuleInfo>();
+                var moduleIdCounter = 0;
+
+                try
+                {
+                    // Enumerate all app domains
+                    foreach (var appDomain in _process.AppDomains)
+                    {
+                        // Enumerate all assemblies in the app domain
+                        foreach (var assembly in appDomain.Assemblies)
+                        {
+                            // Enumerate all modules in the assembly
+                            foreach (var module in assembly.Modules)
+                            {
+                                try
+                                {
+                                    var moduleInfo = ExtractModuleInfo(module, ref moduleIdCounter);
+
+                                    // Apply system filter
+                                    if (!includeSystem && IsSystemModule(moduleInfo.Name))
+                                    {
+                                        continue;
+                                    }
+
+                                    // Apply name filter (supports wildcards)
+                                    if (!string.IsNullOrEmpty(nameFilter) && !MatchesWildcardPattern(moduleInfo.Name, nameFilter))
+                                    {
+                                        continue;
+                                    }
+
+                                    modules.Add(moduleInfo);
+                                }
+                                catch (Exception ex)
+                                {
+                                    _logger.LogWarning(ex, "Error extracting info for module");
+                                }
+                            }
+                        }
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogWarning(ex, "Error enumerating modules");
+                    throw new InvalidOperationException($"Failed to enumerate modules: {ex.Message}", ex);
+                }
+
+                _logger.LogInformation("Retrieved {Count} modules", modules.Count);
+                return (IReadOnlyList<Models.Modules.ModuleInfo>)modules;
+            }
+        }, cancellationToken);
+    }
+
+    /// <summary>
+    /// Extracts module information from an ICorDebugModule.
+    /// </summary>
+    private Models.Modules.ModuleInfo ExtractModuleInfo(CorDebugModule module, ref int moduleIdCounter)
+    {
+        var modulePath = module.Name ?? string.Empty;
+        var moduleName = ExtractModuleName(modulePath);
+        var isDynamic = module.IsDynamic;
+        var isInMemory = module.IsInMemory;
+
+        // Get base address and size
+        ulong baseAddress = 0;
+        uint size = 0;
+        try
+        {
+            baseAddress = (ulong)module.BaseAddress;
+            size = (uint)module.Size;
+        }
+        catch
+        {
+            // Some modules may not have this info
+        }
+
+        // Try to get version from assembly metadata
+        var version = ExtractModuleVersion(module, modulePath);
+
+        // Check for symbols
+        var hasSymbols = CheckHasSymbols(modulePath);
+
+        var moduleId = $"mod-{++moduleIdCounter}";
+
+        return new Models.Modules.ModuleInfo(
+            Name: moduleName,
+            FullName: modulePath,
+            Path: isInMemory ? null : modulePath,
+            Version: version,
+            IsManaged: true, // ICorDebug only enumerates managed modules
+            IsDynamic: isDynamic,
+            HasSymbols: hasSymbols,
+            ModuleId: moduleId,
+            BaseAddress: baseAddress > 0 ? $"0x{baseAddress:X16}" : null,
+            Size: (int)size
+        );
+    }
+
+    /// <summary>
+    /// Extracts the assembly name from a module path.
+    /// </summary>
+    private static string ExtractModuleName(string modulePath)
+    {
+        if (string.IsNullOrEmpty(modulePath))
+        {
+            return "<unknown>";
+        }
+
+        // For file paths, extract the file name without extension
+        if (modulePath.Contains(Path.DirectorySeparatorChar) || modulePath.Contains(Path.AltDirectorySeparatorChar))
+        {
+            var fileName = Path.GetFileNameWithoutExtension(modulePath);
+            return string.IsNullOrEmpty(fileName) ? modulePath : fileName;
+        }
+
+        // For in-memory modules, the name might already be just the assembly name
+        // Remove .dll extension if present
+        if (modulePath.EndsWith(".dll", StringComparison.OrdinalIgnoreCase))
+        {
+            return modulePath[..^4];
+        }
+        if (modulePath.EndsWith(".exe", StringComparison.OrdinalIgnoreCase))
+        {
+            return modulePath[..^4];
+        }
+
+        return modulePath;
+    }
+
+    /// <summary>
+    /// Extracts the version from module metadata.
+    /// </summary>
+    private string ExtractModuleVersion(CorDebugModule module, string modulePath)
+    {
+        try
+        {
+            // Try to get version from file if it exists
+            if (!string.IsNullOrEmpty(modulePath) && File.Exists(modulePath))
+            {
+                var fileVersionInfo = FileVersionInfo.GetVersionInfo(modulePath);
+                if (!string.IsNullOrEmpty(fileVersionInfo.FileVersion))
+                {
+                    return fileVersionInfo.FileVersion;
+                }
+
+                // Fall back to product version
+                if (!string.IsNullOrEmpty(fileVersionInfo.ProductVersion))
+                {
+                    return fileVersionInfo.ProductVersion;
+                }
+            }
+        }
+        catch (Exception ex)
+        {
+            _logger.LogDebug(ex, "Could not extract version from module {ModulePath}", modulePath);
+        }
+
+        return "0.0.0.0";
+    }
+
+    /// <summary>
+    /// Checks if the module has symbols (PDB) available.
+    /// </summary>
+    private static bool CheckHasSymbols(string modulePath)
+    {
+        if (string.IsNullOrEmpty(modulePath) || !File.Exists(modulePath))
+        {
+            return false;
+        }
+
+        try
+        {
+            // Check for PDB file in same directory
+            var directory = Path.GetDirectoryName(modulePath);
+            var baseName = Path.GetFileNameWithoutExtension(modulePath);
+
+            if (directory == null)
+            {
+                return false;
+            }
+
+            var pdbPath = Path.Combine(directory, baseName + ".pdb");
+            return File.Exists(pdbPath);
+        }
+        catch
+        {
+            return false;
+        }
+    }
+
+    /// <summary>
+    /// Determines if a module is a system module.
+    /// </summary>
+    private static bool IsSystemModule(string moduleName)
+    {
+        // Common system module prefixes
+        if (moduleName.StartsWith("System.", StringComparison.OrdinalIgnoreCase) ||
+            moduleName.StartsWith("Microsoft.", StringComparison.OrdinalIgnoreCase) ||
+            moduleName.StartsWith("netstandard", StringComparison.OrdinalIgnoreCase))
+        {
+            return true;
+        }
+
+        // Well-known system modules
+        return moduleName switch
+        {
+            "System" => true,
+            "mscorlib" => true,
+            "System.Private.CoreLib" => true,
+            "WindowsBase" => true,
+            "PresentationCore" => true,
+            "PresentationFramework" => true,
+            _ => false
+        };
+    }
+
+    /// <summary>
+    /// Matches a string against a wildcard pattern (supports * wildcard).
+    /// </summary>
+    private static bool MatchesWildcardPattern(string input, string pattern)
+    {
+        if (string.IsNullOrEmpty(pattern))
+        {
+            return true;
+        }
+
+        // Simple wildcard matching
+        if (pattern == "*")
+        {
+            return true;
+        }
+
+        // Handle prefix wildcard: *suffix
+        if (pattern.StartsWith('*') && !pattern.EndsWith('*'))
+        {
+            var suffix = pattern[1..];
+            return input.EndsWith(suffix, StringComparison.OrdinalIgnoreCase);
+        }
+
+        // Handle suffix wildcard: prefix*
+        if (pattern.EndsWith('*') && !pattern.StartsWith('*'))
+        {
+            var prefix = pattern[..^1];
+            return input.StartsWith(prefix, StringComparison.OrdinalIgnoreCase);
+        }
+
+        // Handle contains wildcard: *middle*
+        if (pattern.StartsWith('*') && pattern.EndsWith('*'))
+        {
+            var middle = pattern[1..^1];
+            return input.Contains(middle, StringComparison.OrdinalIgnoreCase);
+        }
+
+        // No wildcard - exact match (case-insensitive)
+        return input.Equals(pattern, StringComparison.OrdinalIgnoreCase);
+    }
+
+    /// <summary>
+    /// Checks if a string matches a wildcard pattern with configurable case sensitivity.
+    /// </summary>
+    private static bool MatchesWildcardPattern(string input, string pattern, bool caseSensitive)
+    {
+        if (string.IsNullOrEmpty(pattern))
+        {
+            return true;
+        }
+
+        var comparison = caseSensitive ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
+
+        // Simple wildcard matching
+        if (pattern == "*")
+        {
+            return true;
+        }
+
+        // Handle prefix wildcard: *suffix
+        if (pattern.StartsWith('*') && !pattern.EndsWith('*'))
+        {
+            var suffix = pattern[1..];
+            return input.EndsWith(suffix, comparison);
+        }
+
+        // Handle suffix wildcard: prefix*
+        if (pattern.EndsWith('*') && !pattern.StartsWith('*'))
+        {
+            var prefix = pattern[..^1];
+            return input.StartsWith(prefix, comparison);
+        }
+
+        // Handle contains wildcard: *middle*
+        if (pattern.StartsWith('*') && pattern.EndsWith('*'))
+        {
+            var middle = pattern[1..^1];
+            return input.Contains(middle, comparison);
+        }
+
+        // No wildcard - exact match
+        return input.Equals(pattern, comparison);
+    }
+
+    /// <inheritdoc />
+    public Task<Models.Modules.TypesResult> GetTypesAsync(
+        string moduleName,
+        string? namespaceFilter = null,
+        Models.Modules.TypeKind? kind = null,
+        Models.Modules.Visibility? visibility = null,
+        int maxResults = 100,
+        string? continuationToken = null,
+        CancellationToken cancellationToken = default)
+    {
+        return Task.Run(() =>
+        {
+            lock (_lock)
+            {
+                if (_process == null)
+                {
+                    throw new InvalidOperationException("Cannot get types: debugger is not attached to any process");
+                }
+
+                _logger.LogDebug("Getting types from module {ModuleName} (namespaceFilter={NamespaceFilter}, kind={Kind}, visibility={Visibility})",
+                    moduleName, namespaceFilter, kind, visibility);
+
+                // Find the module
+                var moduleInfo = FindModuleByName(moduleName);
+                if (moduleInfo == null)
+                {
+                    throw new InvalidOperationException($"Module '{moduleName}' not found in loaded modules");
+                }
+
+                // Read types from PE metadata
+                var (types, namespaces, totalCount) = ReadTypesFromModule(
+                    moduleInfo.FullName,
+                    moduleName,
+                    namespaceFilter,
+                    kind,
+                    visibility,
+                    maxResults,
+                    continuationToken);
+
+                var truncated = types.Count < totalCount;
+                string? nextToken = truncated ? $"offset:{types.Count}" : null;
+
+                _logger.LogInformation("Retrieved {Count}/{Total} types from module {ModuleName}",
+                    types.Count, totalCount, moduleName);
+
+                return new Models.Modules.TypesResult(
+                    ModuleName: moduleName,
+                    NamespaceFilter: namespaceFilter,
+                    Types: types.ToArray(),
+                    Namespaces: namespaces.ToArray(),
+                    TotalCount: totalCount,
+                    ReturnedCount: types.Count,
+                    Truncated: truncated,
+                    ContinuationToken: nextToken
+                );
+            }
+        }, cancellationToken);
+    }
+
+    /// <summary>
+    /// Finds a module by name (case-insensitive).
+    /// </summary>
+    private Models.Modules.ModuleInfo? FindModuleByName(string moduleName)
+    {
+        var moduleIdCounter = 0;
+        foreach (var appDomain in _process!.AppDomains)
+        {
+            foreach (var assembly in appDomain.Assemblies)
+            {
+                foreach (var module in assembly.Modules)
+                {
+                    var info = ExtractModuleInfo(module, ref moduleIdCounter);
+                    if (info.Name.Equals(moduleName, StringComparison.OrdinalIgnoreCase) ||
+                        info.FullName.Equals(moduleName, StringComparison.OrdinalIgnoreCase))
+                    {
+                        return info;
+                    }
+                }
+            }
+        }
+        return null;
+    }
+
+    /// <summary>
+    /// Reads types from a module using System.Reflection.Metadata.
+    /// </summary>
+    private (List<Models.Modules.TypeInfo> Types, List<Models.Modules.NamespaceNode> Namespaces, int TotalCount)
+        ReadTypesFromModule(
+            string modulePath,
+            string moduleName,
+            string? namespaceFilter,
+            Models.Modules.TypeKind? kindFilter,
+            Models.Modules.Visibility? visibilityFilter,
+            int maxResults,
+            string? continuationToken)
+    {
+        var types = new List<Models.Modules.TypeInfo>();
+        var namespaceMap = new Dictionary<string, (int TypeCount, HashSet<string> Children)>(StringComparer.OrdinalIgnoreCase);
+        var totalCount = 0;
+
+        // Parse continuation token for offset
+        var offset = 0;
+        if (!string.IsNullOrEmpty(continuationToken) && continuationToken.StartsWith("offset:"))
+        {
+            int.TryParse(continuationToken.AsSpan(7), out offset);
+        }
+
+        // Check if file exists
+        if (string.IsNullOrEmpty(modulePath) || !File.Exists(modulePath))
+        {
+            _logger.LogWarning("Module file not found: {ModulePath}", modulePath);
+            return (types, new List<Models.Modules.NamespaceNode>(), 0);
+        }
+
+        try
+        {
+            using var peStream = File.OpenRead(modulePath);
+            using var peReader = new PEReader(peStream);
+
+            if (!peReader.HasMetadata)
+            {
+                _logger.LogWarning("Module has no metadata: {ModulePath}", modulePath);
+                return (types, new List<Models.Modules.NamespaceNode>(), 0);
+            }
+
+            var metadataReader = peReader.GetMetadataReader();
+            var currentIndex = 0;
+
+            foreach (var typeDefHandle in metadataReader.TypeDefinitions)
+            {
+                var typeDef = metadataReader.GetTypeDefinition(typeDefHandle);
+
+                // Skip nested types (they're handled by their parent)
+                if (typeDef.IsNested) continue;
+
+                // Skip <Module> type
+                var typeName = metadataReader.GetString(typeDef.Name);
+                if (typeName == "<Module>") continue;
+
+                var namespaceName = metadataReader.GetString(typeDef.Namespace);
+
+                // Apply namespace filter
+                if (!string.IsNullOrEmpty(namespaceFilter) &&
+                    !MatchesWildcardPattern(namespaceName, namespaceFilter))
+                {
+                    continue;
+                }
+
+                // Extract type info
+                var typeKind = GetTypeKind(typeDef, metadataReader);
+                var typeVisibility = GetTypeVisibility(typeDef.Attributes);
+
+                // Apply kind filter
+                if (kindFilter.HasValue && typeKind != kindFilter.Value)
+                {
+                    continue;
+                }
+
+                // Apply visibility filter
+                if (visibilityFilter.HasValue && typeVisibility != visibilityFilter.Value)
+                {
+                    continue;
+                }
+
+                // Track namespace
+                TrackNamespace(namespaceMap, namespaceName);
+
+                totalCount++;
+
+                // Handle pagination
+                if (currentIndex < offset)
+                {
+                    currentIndex++;
+                    continue;
+                }
+
+                if (types.Count >= maxResults)
+                {
+                    continue; // Continue counting but don't add more
+                }
+
+                // Build type info
+                var typeInfo = BuildTypeInfo(typeDef, metadataReader, moduleName);
+                types.Add(typeInfo);
+                currentIndex++;
+            }
+        }
+        catch (BadImageFormatException ex)
+        {
+            _logger.LogWarning(ex, "Invalid PE format for module: {ModulePath}", modulePath);
+        }
+        catch (Exception ex)
+        {
+            _logger.LogWarning(ex, "Error reading metadata from module: {ModulePath}", modulePath);
+        }
+
+        // Build namespace hierarchy
+        var namespaces = BuildNamespaceHierarchy(namespaceMap);
+
+        return (types, namespaces, totalCount);
+    }
+
+    /// <summary>
+    /// Determines the TypeKind from TypeDefinition.
+    /// </summary>
+    private static Models.Modules.TypeKind GetTypeKind(TypeDefinition typeDef, MetadataReader reader)
+    {
+        var attributes = typeDef.Attributes;
+
+        // Check for enum
+        var baseTypeHandle = typeDef.BaseType;
+        if (!baseTypeHandle.IsNil)
+        {
+            var baseTypeName = GetTypeReferenceName(baseTypeHandle, reader);
+            if (baseTypeName == "System.Enum")
+                return Models.Modules.TypeKind.Enum;
+            if (baseTypeName == "System.ValueType")
+                return Models.Modules.TypeKind.Struct;
+            if (baseTypeName == "System.MulticastDelegate" || baseTypeName == "System.Delegate")
+                return Models.Modules.TypeKind.Delegate;
+        }
+
+        // Check for interface
+        if ((attributes & TypeAttributes.Interface) != 0)
+            return Models.Modules.TypeKind.Interface;
+
+        // Check for struct (value type without Enum base)
+        if ((attributes & TypeAttributes.Sealed) != 0 &&
+            (attributes & TypeAttributes.SequentialLayout) != 0)
+            return Models.Modules.TypeKind.Struct;
+
+        return Models.Modules.TypeKind.Class;
+    }
+
+    /// <summary>
+    /// Gets the name of a type reference.
+    /// </summary>
+    private static string GetTypeReferenceName(EntityHandle handle, MetadataReader reader)
+    {
+        if (handle.IsNil) return string.Empty;
+
+        if (handle.Kind == HandleKind.TypeReference)
+        {
+            var typeRef = reader.GetTypeReference((TypeReferenceHandle)handle);
+            var ns = reader.GetString(typeRef.Namespace);
+            var name = reader.GetString(typeRef.Name);
+            return string.IsNullOrEmpty(ns) ? name : $"{ns}.{name}";
+        }
+
+        if (handle.Kind == HandleKind.TypeDefinition)
+        {
+            var typeDef = reader.GetTypeDefinition((TypeDefinitionHandle)handle);
+            var ns = reader.GetString(typeDef.Namespace);
+            var name = reader.GetString(typeDef.Name);
+            return string.IsNullOrEmpty(ns) ? name : $"{ns}.{name}";
+        }
+
+        return string.Empty;
+    }
+
+    /// <summary>
+    /// Maps TypeAttributes to Visibility enum.
+    /// </summary>
+    private static Models.Modules.Visibility GetTypeVisibility(TypeAttributes attributes)
+    {
+        var visibilityMask = attributes & TypeAttributes.VisibilityMask;
+        return visibilityMask switch
+        {
+            TypeAttributes.Public => Models.Modules.Visibility.Public,
+            TypeAttributes.NotPublic => Models.Modules.Visibility.Internal,
+            TypeAttributes.NestedPublic => Models.Modules.Visibility.Public,
+            TypeAttributes.NestedPrivate => Models.Modules.Visibility.Private,
+            TypeAttributes.NestedFamily => Models.Modules.Visibility.Protected,
+            TypeAttributes.NestedAssembly => Models.Modules.Visibility.Internal,
+            TypeAttributes.NestedFamORAssem => Models.Modules.Visibility.ProtectedInternal,
+            TypeAttributes.NestedFamANDAssem => Models.Modules.Visibility.PrivateProtected,
+            _ => Models.Modules.Visibility.Internal
+        };
+    }
+
+    /// <summary>
+    /// Builds a TypeInfo from a TypeDefinition.
+    /// </summary>
+    private Models.Modules.TypeInfo BuildTypeInfo(TypeDefinition typeDef, MetadataReader reader, string moduleName)
+    {
+        var typeName = reader.GetString(typeDef.Name);
+        var namespaceName = reader.GetString(typeDef.Namespace);
+        var fullName = string.IsNullOrEmpty(namespaceName) ? typeName : $"{namespaceName}.{typeName}";
+
+        // Handle generic parameters
+        var genericParams = new List<string>();
+        var isGeneric = false;
+        foreach (var paramHandle in typeDef.GetGenericParameters())
+        {
+            isGeneric = true;
+            var param = reader.GetGenericParameter(paramHandle);
+            genericParams.Add(reader.GetString(param.Name));
+        }
+
+        // Clean up generic type name (remove `1, `2, etc.)
+        if (isGeneric && typeName.Contains('`'))
+        {
+            var tickIndex = typeName.IndexOf('`');
+            typeName = typeName[..tickIndex];
+            fullName = string.IsNullOrEmpty(namespaceName) ? typeName : $"{namespaceName}.{typeName}";
+        }
+
+        // Get base type
+        string? baseTypeName = null;
+        if (!typeDef.BaseType.IsNil)
+        {
+            baseTypeName = GetTypeReferenceName(typeDef.BaseType, reader);
+            if (baseTypeName == "System.Object")
+            {
+                baseTypeName = null; // Don't show Object as base
+            }
+        }
+
+        // Get interfaces
+        var interfaces = new List<string>();
+        foreach (var interfaceImpl in typeDef.GetInterfaceImplementations())
+        {
+            var impl = reader.GetInterfaceImplementation(interfaceImpl);
+            var interfaceName = GetTypeReferenceName(impl.Interface, reader);
+            if (!string.IsNullOrEmpty(interfaceName))
+            {
+                interfaces.Add(interfaceName);
+            }
+        }
+
+        return new Models.Modules.TypeInfo(
+            FullName: fullName,
+            Name: typeName,
+            Namespace: namespaceName,
+            Kind: GetTypeKind(typeDef, reader),
+            Visibility: GetTypeVisibility(typeDef.Attributes),
+            IsGeneric: isGeneric,
+            GenericParameters: genericParams.ToArray(),
+            IsNested: typeDef.IsNested,
+            DeclaringType: null, // Nested types are already filtered out
+            ModuleName: moduleName,
+            BaseType: baseTypeName,
+            Interfaces: interfaces.ToArray()
+        );
+    }
+
+    /// <summary>
+    /// Tracks a namespace in the namespace map.
+    /// </summary>
+    private static void TrackNamespace(Dictionary<string, (int TypeCount, HashSet<string> Children)> map, string namespaceName)
+    {
+        if (string.IsNullOrEmpty(namespaceName))
+        {
+            namespaceName = "(global)";
+        }
+
+        // Increment count for this namespace
+        if (map.TryGetValue(namespaceName, out var entry))
+        {
+            map[namespaceName] = (entry.TypeCount + 1, entry.Children);
+        }
+        else
+        {
+            map[namespaceName] = (1, new HashSet<string>());
+        }
+
+        // Track parent namespaces
+        var parts = namespaceName.Split('.');
+        for (var i = 1; i < parts.Length; i++)
+        {
+            var parentNs = string.Join('.', parts.Take(i));
+            var childNs = string.Join('.', parts.Take(i + 1));
+
+            if (!map.TryGetValue(parentNs, out var parentEntry))
+            {
+                parentEntry = (0, new HashSet<string>());
+            }
+            parentEntry.Children.Add(childNs);
+            map[parentNs] = parentEntry;
+        }
+    }
+
+    /// <summary>
+    /// Builds namespace hierarchy from the namespace map.
+    /// </summary>
+    private static List<Models.Modules.NamespaceNode> BuildNamespaceHierarchy(
+        Dictionary<string, (int TypeCount, HashSet<string> Children)> map)
+    {
+        var nodes = new List<Models.Modules.NamespaceNode>();
+
+        foreach (var (fullName, (typeCount, children)) in map)
+        {
+            var depth = fullName == "(global)" ? 0 : fullName.Count(c => c == '.') + 1;
+            var name = fullName == "(global)" ? "(global)" : fullName.Split('.').Last();
+
+            nodes.Add(new Models.Modules.NamespaceNode(
+                Name: name,
+                FullName: fullName,
+                TypeCount: typeCount,
+                ChildNamespaces: children.ToArray(),
+                Depth: depth
+            ));
+        }
+
+        // Sort by full name
+        nodes.Sort((a, b) => string.Compare(a.FullName, b.FullName, StringComparison.OrdinalIgnoreCase));
+
+        return nodes;
+    }
+
+    /// <inheritdoc />
+    public async Task<Models.Modules.TypeMembersResult> GetMembersAsync(
+        string typeName,
+        string? moduleName = null,
+        bool includeInherited = false,
+        string[]? memberKinds = null,
+        Models.Modules.Visibility? visibility = null,
+        bool includeStatic = true,
+        bool includeInstance = true,
+        CancellationToken cancellationToken = default)
+    {
+        if (_process == null)
+        {
+            throw new InvalidOperationException("Cannot get members: debugger is not attached to any process");
+        }
+
+        // Determine which member kinds to include
+        var includeMethods = memberKinds == null || memberKinds.Contains("methods", StringComparer.OrdinalIgnoreCase);
+        var includeProperties = memberKinds == null || memberKinds.Contains("properties", StringComparer.OrdinalIgnoreCase);
+        var includeFields = memberKinds == null || memberKinds.Contains("fields", StringComparer.OrdinalIgnoreCase);
+        var includeEvents = memberKinds == null || memberKinds.Contains("events", StringComparer.OrdinalIgnoreCase);
+
+        // Find the type in modules
+        var (moduleInfo, typeDefHandle, metadataReader, peReader) = await Task.Run(() =>
+            FindTypeDefinition(typeName, moduleName), cancellationToken);
+
+        if (moduleInfo == null || metadataReader == null || peReader == null)
+        {
+            throw new InvalidOperationException($"Type '{typeName}' not found" +
+                (moduleName != null ? $" in module '{moduleName}'" : " in any loaded module"));
+        }
+
+        try
+        {
+            var typeDef = metadataReader.GetTypeDefinition(typeDefHandle);
+            var methods = new List<Models.Modules.MethodMemberInfo>();
+            var properties = new List<Models.Modules.PropertyMemberInfo>();
+            var fields = new List<Models.Modules.FieldMemberInfo>();
+            var events = new List<Models.Modules.EventMemberInfo>();
+
+            // Read members from the type
+            if (includeMethods)
+            {
+                methods.AddRange(ReadMethods(typeDef, metadataReader, typeName, visibility, includeStatic, includeInstance));
+            }
+
+            if (includeProperties)
+            {
+                properties.AddRange(ReadProperties(typeDef, metadataReader, typeName, visibility, includeStatic, includeInstance));
+            }
+
+            if (includeFields)
+            {
+                fields.AddRange(ReadFields(typeDef, metadataReader, typeName, visibility, includeStatic, includeInstance));
+            }
+
+            if (includeEvents)
+            {
+                events.AddRange(ReadEvents(typeDef, metadataReader, typeName, visibility, includeStatic, includeInstance));
+            }
+
+            // Handle inherited members if requested
+            if (includeInherited)
+            {
+                var baseTypeHandle = typeDef.BaseType;
+                if (!baseTypeHandle.IsNil)
+                {
+                    var inheritedMembers = await ReadInheritedMembersAsync(
+                        baseTypeHandle, metadataReader, peReader, moduleInfo.Path,
+                        memberKinds, visibility, includeStatic, includeInstance, cancellationToken);
+
+                    if (includeMethods) methods.AddRange(inheritedMembers.Methods);
+                    if (includeProperties) properties.AddRange(inheritedMembers.Properties);
+                    if (includeFields) fields.AddRange(inheritedMembers.Fields);
+                    if (includeEvents) events.AddRange(inheritedMembers.Events);
+                }
+            }
+
+            return new Models.Modules.TypeMembersResult(
+                TypeName: typeName,
+                Methods: methods.ToArray(),
+                Properties: properties.ToArray(),
+                Fields: fields.ToArray(),
+                Events: events.ToArray(),
+                IncludesInherited: includeInherited,
+                MethodCount: methods.Count,
+                PropertyCount: properties.Count,
+                FieldCount: fields.Count,
+                EventCount: events.Count);
+        }
+        finally
+        {
+            peReader.Dispose();
+        }
+    }
+
+    /// <summary>
+    /// Finds a type definition by name in loaded modules.
+    /// </summary>
+    private (Models.Modules.ModuleInfo? Module, TypeDefinitionHandle TypeHandle, MetadataReader? Reader, PEReader? PeReader)
+        FindTypeDefinition(string typeName, string? moduleName)
+    {
+        // If module is specified, search only that module
+        if (moduleName != null)
+        {
+            var moduleInfo = FindModuleByName(moduleName);
+            if (moduleInfo == null)
+            {
+                throw new InvalidOperationException($"Module '{moduleName}' not found in loaded modules");
+            }
+
+            var (handle, reader, peReader) = FindTypeInModule(moduleInfo.Path, typeName);
+            return (moduleInfo, handle, reader, peReader);
+        }
+
+        // Search all modules
+        var moduleIdCounter = 0;
+        foreach (var appDomain in _process!.AppDomains)
+        {
+            foreach (var assembly in appDomain.Assemblies)
+            {
+                foreach (var module in assembly.Modules)
+                {
+                    var info = ExtractModuleInfo(module, ref moduleIdCounter);
+                    if (string.IsNullOrEmpty(info.Path) || !File.Exists(info.Path))
+                        continue;
+
+                    var (handle, reader, peReader) = FindTypeInModule(info.Path, typeName);
+                    if (!handle.IsNil && reader != null && peReader != null)
+                    {
+                        return (info, handle, reader, peReader);
+                    }
+                }
+            }
+        }
+
+        return (null, default, null, null);
+    }
+
+    /// <summary>
+    /// Finds a type in a specific module by name.
+    /// </summary>
+    private (TypeDefinitionHandle Handle, MetadataReader? Reader, PEReader? PeReader) FindTypeInModule(string modulePath, string typeName)
+    {
+        try
+        {
+            var peReader = new PEReader(File.OpenRead(modulePath));
+            if (!peReader.HasMetadata)
+            {
+                peReader.Dispose();
+                return (default, null, null);
+            }
+
+            var reader = peReader.GetMetadataReader();
+
+            // Parse the type name to get namespace and name
+            var lastDot = typeName.LastIndexOf('.');
+            var targetNamespace = lastDot > 0 ? typeName.Substring(0, lastDot) : "";
+            var targetName = lastDot > 0 ? typeName.Substring(lastDot + 1) : typeName;
+
+            // Handle nested types (Outer+Inner)
+            var plusIndex = targetName.IndexOf('+');
+            if (plusIndex > 0)
+            {
+                // For nested types, find parent first
+                var outerTypeName = lastDot > 0 ? targetNamespace + "." + targetName.Substring(0, plusIndex) : targetName.Substring(0, plusIndex);
+                var (outerHandle, _, _) = FindTypeInModule(modulePath, outerTypeName);
+                if (outerHandle.IsNil)
+                {
+                    peReader.Dispose();
+                    return (default, null, null);
+                }
+
+                // Use a fresh reader since we dispose the old one
+                peReader = new PEReader(File.OpenRead(modulePath));
+                reader = peReader.GetMetadataReader();
+
+                var outerType = reader.GetTypeDefinition(outerHandle);
+                var nestedName = targetName.Substring(plusIndex + 1);
+
+                foreach (var nestedHandle in outerType.GetNestedTypes())
+                {
+                    var nestedDef = reader.GetTypeDefinition(nestedHandle);
+                    var name = reader.GetString(nestedDef.Name);
+                    if (name == nestedName)
+                    {
+                        return (nestedHandle, reader, peReader);
+                    }
+                }
+
+                peReader.Dispose();
+                return (default, null, null);
+            }
+
+            // Search for top-level type
+            foreach (var typeHandle in reader.TypeDefinitions)
+            {
+                var typeDef = reader.GetTypeDefinition(typeHandle);
+                var ns = reader.GetString(typeDef.Namespace);
+                var name = reader.GetString(typeDef.Name);
+
+                if (ns == targetNamespace && name == targetName)
+                {
+                    return (typeHandle, reader, peReader);
+                }
+            }
+
+            peReader.Dispose();
+            return (default, null, null);
+        }
+        catch
+        {
+            return (default, null, null);
+        }
+    }
+
+    /// <summary>
+    /// Reads methods from a type definition.
+    /// </summary>
+    private List<Models.Modules.MethodMemberInfo> ReadMethods(
+        TypeDefinition typeDef,
+        MetadataReader reader,
+        string declaringType,
+        Models.Modules.Visibility? visibility,
+        bool includeStatic,
+        bool includeInstance)
+    {
+        var methods = new List<Models.Modules.MethodMemberInfo>();
+
+        foreach (var methodHandle in typeDef.GetMethods())
+        {
+            var methodDef = reader.GetMethodDefinition(methodHandle);
+            var methodName = reader.GetString(methodDef.Name);
+
+            // Skip special methods (property accessors, event handlers) unless they're constructors
+            if (methodName.StartsWith("get_") || methodName.StartsWith("set_") ||
+                methodName.StartsWith("add_") || methodName.StartsWith("remove_"))
+            {
+                continue;
+            }
+
+            var isStatic = (methodDef.Attributes & MethodAttributes.Static) != 0;
+            if (isStatic && !includeStatic) continue;
+            if (!isStatic && !includeInstance) continue;
+
+            var methodVisibility = GetMethodVisibility(methodDef.Attributes);
+            if (visibility.HasValue && methodVisibility != visibility.Value) continue;
+
+            var isVirtual = (methodDef.Attributes & MethodAttributes.Virtual) != 0;
+            var isAbstract = (methodDef.Attributes & MethodAttributes.Abstract) != 0;
+
+            // Decode signature
+            var signature = methodDef.DecodeSignature(new SignatureTypeProvider(reader), null);
+            var returnType = signature.ReturnType;
+            var parameters = ReadMethodParameters(methodDef, reader, signature);
+            var genericParams = ReadGenericParameters(methodDef.GetGenericParameters(), reader);
+
+            var signatureStr = BuildMethodSignature(methodName, returnType, parameters, genericParams);
+
+            methods.Add(new Models.Modules.MethodMemberInfo(
+                Name: methodName,
+                Signature: signatureStr,
+                ReturnType: returnType,
+                Parameters: parameters,
+                Visibility: methodVisibility,
+                IsStatic: isStatic,
+                IsVirtual: isVirtual,
+                IsAbstract: isAbstract,
+                IsGeneric: genericParams.Length > 0,
+                GenericParameters: genericParams.Length > 0 ? genericParams : null,
+                DeclaringType: declaringType));
+        }
+
+        return methods;
+    }
+
+    /// <summary>
+    /// Reads properties from a type definition.
+    /// </summary>
+    private List<Models.Modules.PropertyMemberInfo> ReadProperties(
+        TypeDefinition typeDef,
+        MetadataReader reader,
+        string declaringType,
+        Models.Modules.Visibility? visibility,
+        bool includeStatic,
+        bool includeInstance)
+    {
+        var properties = new List<Models.Modules.PropertyMemberInfo>();
+
+        foreach (var propHandle in typeDef.GetProperties())
+        {
+            var propDef = reader.GetPropertyDefinition(propHandle);
+            var propName = reader.GetString(propDef.Name);
+            var accessors = propDef.GetAccessors();
+
+            Models.Modules.Visibility? getterVis = null;
+            Models.Modules.Visibility? setterVis = null;
+            bool isStatic = false;
+            bool isIndexer = false;
+            Models.Modules.ParameterInfo[]? indexerParams = null;
+
+            if (!accessors.Getter.IsNil)
+            {
+                var getter = reader.GetMethodDefinition(accessors.Getter);
+                getterVis = GetMethodVisibility(getter.Attributes);
+                isStatic = (getter.Attributes & MethodAttributes.Static) != 0;
+
+                // Check if it's an indexer
+                var sig = getter.DecodeSignature(new SignatureTypeProvider(reader), null);
+                if (sig.ParameterTypes.Length > 0)
+                {
+                    isIndexer = true;
+                    indexerParams = sig.ParameterTypes.Select((t, i) =>
+                        new Models.Modules.ParameterInfo($"index{i}", t, false, false, false, null)).ToArray();
+                }
+            }
+
+            if (!accessors.Setter.IsNil)
+            {
+                var setter = reader.GetMethodDefinition(accessors.Setter);
+                setterVis = GetMethodVisibility(setter.Attributes);
+                if (accessors.Getter.IsNil)
+                {
+                    isStatic = (setter.Attributes & MethodAttributes.Static) != 0;
+                }
+            }
+
+            if (isStatic && !includeStatic) continue;
+            if (!isStatic && !includeInstance) continue;
+
+            // Overall visibility is the most accessible
+            var propVisibility = getterVis ?? setterVis ?? Models.Modules.Visibility.Private;
+            if (setterVis.HasValue && IsMoreAccessible(setterVis.Value, propVisibility))
+            {
+                propVisibility = setterVis.Value;
+            }
+
+            if (visibility.HasValue && propVisibility != visibility.Value) continue;
+
+            // Get property type
+            var propSig = propDef.DecodeSignature(new SignatureTypeProvider(reader), null);
+            var propType = propSig.ReturnType;
+
+            properties.Add(new Models.Modules.PropertyMemberInfo(
+                Name: propName,
+                Type: propType,
+                Visibility: propVisibility,
+                IsStatic: isStatic,
+                HasGetter: !accessors.Getter.IsNil,
+                HasSetter: !accessors.Setter.IsNil,
+                GetterVisibility: getterVis,
+                SetterVisibility: setterVis,
+                IsIndexer: isIndexer,
+                IndexerParameters: indexerParams));
+        }
+
+        return properties;
+    }
+
+    /// <summary>
+    /// Reads fields from a type definition.
+    /// </summary>
+    private List<Models.Modules.FieldMemberInfo> ReadFields(
+        TypeDefinition typeDef,
+        MetadataReader reader,
+        string declaringType,
+        Models.Modules.Visibility? visibility,
+        bool includeStatic,
+        bool includeInstance)
+    {
+        var fields = new List<Models.Modules.FieldMemberInfo>();
+
+        foreach (var fieldHandle in typeDef.GetFields())
+        {
+            var fieldDef = reader.GetFieldDefinition(fieldHandle);
+            var fieldName = reader.GetString(fieldDef.Name);
+
+            // Skip compiler-generated backing fields
+            if (fieldName.StartsWith("<") && fieldName.Contains(">"))
+            {
+                continue;
+            }
+
+            var isStatic = (fieldDef.Attributes & FieldAttributes.Static) != 0;
+            if (isStatic && !includeStatic) continue;
+            if (!isStatic && !includeInstance) continue;
+
+            var fieldVisibility = GetFieldVisibility(fieldDef.Attributes);
+            if (visibility.HasValue && fieldVisibility != visibility.Value) continue;
+
+            var isReadOnly = (fieldDef.Attributes & FieldAttributes.InitOnly) != 0;
+            var isConst = (fieldDef.Attributes & FieldAttributes.Literal) != 0;
+
+            // Get field type
+            var fieldSig = fieldDef.DecodeSignature(new SignatureTypeProvider(reader), null);
+
+            // Get constant value if const
+            string? constValue = null;
+            if (isConst)
+            {
+                var defaultValue = fieldDef.GetDefaultValue();
+                if (!defaultValue.IsNil)
+                {
+                    var constant = reader.GetConstant(defaultValue);
+                    var blob = reader.GetBlobReader(constant.Value);
+                    constValue = ReadConstantValue(blob, constant.TypeCode);
+                }
+            }
+
+            fields.Add(new Models.Modules.FieldMemberInfo(
+                Name: fieldName,
+                Type: fieldSig,
+                Visibility: fieldVisibility,
+                IsStatic: isStatic,
+                IsReadOnly: isReadOnly,
+                IsConst: isConst,
+                ConstValue: constValue));
+        }
+
+        return fields;
+    }
+
+    /// <summary>
+    /// Reads events from a type definition.
+    /// </summary>
+    private List<Models.Modules.EventMemberInfo> ReadEvents(
+        TypeDefinition typeDef,
+        MetadataReader reader,
+        string declaringType,
+        Models.Modules.Visibility? visibility,
+        bool includeStatic,
+        bool includeInstance)
+    {
+        var events = new List<Models.Modules.EventMemberInfo>();
+
+        foreach (var eventHandle in typeDef.GetEvents())
+        {
+            var eventDef = reader.GetEventDefinition(eventHandle);
+            var eventName = reader.GetString(eventDef.Name);
+            var accessors = eventDef.GetAccessors();
+
+            Models.Modules.Visibility eventVis = Models.Modules.Visibility.Private;
+            bool isStatic = false;
+            string? addMethod = null;
+            string? removeMethod = null;
+
+            if (!accessors.Adder.IsNil)
+            {
+                var adder = reader.GetMethodDefinition(accessors.Adder);
+                eventVis = GetMethodVisibility(adder.Attributes);
+                isStatic = (adder.Attributes & MethodAttributes.Static) != 0;
+                addMethod = reader.GetString(adder.Name);
+            }
+
+            if (!accessors.Remover.IsNil)
+            {
+                var remover = reader.GetMethodDefinition(accessors.Remover);
+                removeMethod = reader.GetString(remover.Name);
+                if (accessors.Adder.IsNil)
+                {
+                    eventVis = GetMethodVisibility(remover.Attributes);
+                    isStatic = (remover.Attributes & MethodAttributes.Static) != 0;
+                }
+            }
+
+            if (isStatic && !includeStatic) continue;
+            if (!isStatic && !includeInstance) continue;
+            if (visibility.HasValue && eventVis != visibility.Value) continue;
+
+            // Get event type
+            var eventType = eventDef.Type;
+            var eventTypeName = GetTypeReferenceName(eventType, reader);
+
+            events.Add(new Models.Modules.EventMemberInfo(
+                Name: eventName,
+                Type: eventTypeName,
+                Visibility: eventVis,
+                IsStatic: isStatic,
+                AddMethod: addMethod,
+                RemoveMethod: removeMethod));
+        }
+
+        return events;
+    }
+
+    /// <summary>
+    /// Reads inherited members from base types.
+    /// </summary>
+    private async Task<(List<Models.Modules.MethodMemberInfo> Methods,
+                        List<Models.Modules.PropertyMemberInfo> Properties,
+                        List<Models.Modules.FieldMemberInfo> Fields,
+                        List<Models.Modules.EventMemberInfo> Events)>
+        ReadInheritedMembersAsync(
+            EntityHandle baseTypeHandle,
+            MetadataReader reader,
+            PEReader peReader,
+            string currentModulePath,
+            string[]? memberKinds,
+            Models.Modules.Visibility? visibility,
+            bool includeStatic,
+            bool includeInstance,
+            CancellationToken cancellationToken)
+    {
+        var methods = new List<Models.Modules.MethodMemberInfo>();
+        var properties = new List<Models.Modules.PropertyMemberInfo>();
+        var fields = new List<Models.Modules.FieldMemberInfo>();
+        var events = new List<Models.Modules.EventMemberInfo>();
+
+        var baseTypeName = GetTypeReferenceName(baseTypeHandle, reader);
+
+        // Don't include Object's members as they're implicit
+        if (baseTypeName == "System.Object" || baseTypeName == "Object")
+        {
+            return (methods, properties, fields, events);
+        }
+
+        // Try to find and read the base type
+        try
+        {
+            var result = await GetMembersAsync(
+                baseTypeName,
+                moduleName: null, // Search all modules
+                includeInherited: true, // Recursively get inherited members
+                memberKinds,
+                visibility,
+                includeStatic,
+                includeInstance,
+                cancellationToken);
+
+            methods.AddRange(result.Methods);
+            properties.AddRange(result.Properties);
+            fields.AddRange(result.Fields);
+            events.AddRange(result.Events);
+        }
+        catch (InvalidOperationException)
+        {
+            // Base type not found in loaded modules - ignore
+        }
+
+        return (methods, properties, fields, events);
+    }
+
+    /// <summary>
+    /// Reads method parameters from a method definition.
+    /// </summary>
+    private Models.Modules.ParameterInfo[] ReadMethodParameters(
+        MethodDefinition methodDef,
+        MetadataReader reader,
+        MethodSignature<string> signature)
+    {
+        var parameters = new List<Models.Modules.ParameterInfo>();
+        var paramHandles = methodDef.GetParameters().ToArray();
+
+        for (int i = 0; i < signature.ParameterTypes.Length; i++)
+        {
+            var paramType = signature.ParameterTypes[i];
+            var isOut = paramType.StartsWith("out ");
+            var isRef = paramType.StartsWith("ref ");
+
+            string paramName = $"arg{i}";
+            bool isOptional = false;
+            string? defaultValue = null;
+
+            // Find matching parameter handle (they're 1-indexed, 0 is return)
+            foreach (var ph in paramHandles)
+            {
+                var param = reader.GetParameter(ph);
+                if (param.SequenceNumber == i + 1)
+                {
+                    paramName = reader.GetString(param.Name);
+                    isOptional = (param.Attributes & ParameterAttributes.Optional) != 0 ||
+                                (param.Attributes & ParameterAttributes.HasDefault) != 0;
+
+                    if ((param.Attributes & ParameterAttributes.HasDefault) != 0)
+                    {
+                        var defaultHandle = param.GetDefaultValue();
+                        if (!defaultHandle.IsNil)
+                        {
+                            var constant = reader.GetConstant(defaultHandle);
+                            var blob = reader.GetBlobReader(constant.Value);
+                            defaultValue = ReadConstantValue(blob, constant.TypeCode);
+                        }
+                    }
+                    break;
+                }
+            }
+
+            parameters.Add(new Models.Modules.ParameterInfo(
+                Name: paramName,
+                Type: paramType.Replace("out ", "").Replace("ref ", ""),
+                IsOptional: isOptional,
+                IsOut: isOut,
+                IsRef: isRef,
+                DefaultValue: defaultValue));
+        }
+
+        return parameters.ToArray();
+    }
+
+    /// <summary>
+    /// Reads generic parameters from a type or method.
+    /// </summary>
+    private string[] ReadGenericParameters(GenericParameterHandleCollection handles, MetadataReader reader)
+    {
+        var names = new List<string>();
+        foreach (var handle in handles)
+        {
+            var param = reader.GetGenericParameter(handle);
+            names.Add(reader.GetString(param.Name));
+        }
+        return names.ToArray();
+    }
+
+    /// <summary>
+    /// Builds a method signature string.
+    /// </summary>
+    private string BuildMethodSignature(string name, string returnType, Models.Modules.ParameterInfo[] parameters, string[] genericParams)
+    {
+        var sb = new System.Text.StringBuilder();
+        sb.Append(returnType);
+        sb.Append(' ');
+        sb.Append(name);
+
+        if (genericParams.Length > 0)
+        {
+            sb.Append('<');
+            sb.Append(string.Join(", ", genericParams));
+            sb.Append('>');
+        }
+
+        sb.Append('(');
+        for (int i = 0; i < parameters.Length; i++)
+        {
+            if (i > 0) sb.Append(", ");
+
+            var p = parameters[i];
+            if (p.IsOut) sb.Append("out ");
+            else if (p.IsRef) sb.Append("ref ");
+
+            sb.Append(p.Type);
+            sb.Append(' ');
+            sb.Append(p.Name);
+
+            if (p.IsOptional && p.DefaultValue != null)
+            {
+                sb.Append(" = ");
+                sb.Append(p.DefaultValue);
+            }
+        }
+        sb.Append(')');
+
+        return sb.ToString();
+    }
+
+    /// <summary>
+    /// Gets visibility from method attributes.
+    /// </summary>
+    private static Models.Modules.Visibility GetMethodVisibility(MethodAttributes attributes)
+    {
+        return (attributes & MethodAttributes.MemberAccessMask) switch
+        {
+            MethodAttributes.Public => Models.Modules.Visibility.Public,
+            MethodAttributes.Family => Models.Modules.Visibility.Protected,
+            MethodAttributes.Assembly => Models.Modules.Visibility.Internal,
+            MethodAttributes.FamORAssem => Models.Modules.Visibility.ProtectedInternal,
+            MethodAttributes.FamANDAssem => Models.Modules.Visibility.PrivateProtected,
+            MethodAttributes.Private => Models.Modules.Visibility.Private,
+            _ => Models.Modules.Visibility.Private
+        };
+    }
+
+    /// <summary>
+    /// Gets visibility from field attributes.
+    /// </summary>
+    private static Models.Modules.Visibility GetFieldVisibility(FieldAttributes attributes)
+    {
+        return (attributes & FieldAttributes.FieldAccessMask) switch
+        {
+            FieldAttributes.Public => Models.Modules.Visibility.Public,
+            FieldAttributes.Family => Models.Modules.Visibility.Protected,
+            FieldAttributes.Assembly => Models.Modules.Visibility.Internal,
+            FieldAttributes.FamORAssem => Models.Modules.Visibility.ProtectedInternal,
+            FieldAttributes.FamANDAssem => Models.Modules.Visibility.PrivateProtected,
+            FieldAttributes.Private => Models.Modules.Visibility.Private,
+            _ => Models.Modules.Visibility.Private
+        };
+    }
+
+    /// <summary>
+    /// Checks if one visibility is more accessible than another.
+    /// </summary>
+    private static bool IsMoreAccessible(Models.Modules.Visibility a, Models.Modules.Visibility b)
+    {
+        int GetAccessLevel(Models.Modules.Visibility v) => v switch
+        {
+            Models.Modules.Visibility.Public => 5,
+            Models.Modules.Visibility.ProtectedInternal => 4,
+            Models.Modules.Visibility.Protected => 3,
+            Models.Modules.Visibility.Internal => 3,
+            Models.Modules.Visibility.PrivateProtected => 2,
+            Models.Modules.Visibility.Private => 1,
+            _ => 0
+        };
+        return GetAccessLevel(a) > GetAccessLevel(b);
+    }
+
+    /// <summary>
+    /// Reads a constant value from a blob reader.
+    /// </summary>
+    private static string? ReadConstantValue(BlobReader reader, ConstantTypeCode typeCode)
+    {
+        try
+        {
+            return typeCode switch
+            {
+                ConstantTypeCode.Boolean => reader.ReadBoolean().ToString().ToLowerInvariant(),
+                ConstantTypeCode.Char => $"'{reader.ReadChar()}'",
+                ConstantTypeCode.SByte => reader.ReadSByte().ToString(),
+                ConstantTypeCode.Byte => reader.ReadByte().ToString(),
+                ConstantTypeCode.Int16 => reader.ReadInt16().ToString(),
+                ConstantTypeCode.UInt16 => reader.ReadUInt16().ToString(),
+                ConstantTypeCode.Int32 => reader.ReadInt32().ToString(),
+                ConstantTypeCode.UInt32 => reader.ReadUInt32().ToString(),
+                ConstantTypeCode.Int64 => reader.ReadInt64().ToString(),
+                ConstantTypeCode.UInt64 => reader.ReadUInt64().ToString(),
+                ConstantTypeCode.Single => reader.ReadSingle().ToString(),
+                ConstantTypeCode.Double => reader.ReadDouble().ToString(),
+                ConstantTypeCode.String => $"\"{reader.ReadSerializedString()}\"",
+                ConstantTypeCode.NullReference => "null",
+                _ => null
+            };
+        }
+        catch
+        {
+            return null;
+        }
+    }
+
+    /// <summary>
+    /// Signature type provider for decoding method signatures.
+    /// </summary>
+    private sealed class SignatureTypeProvider : ISignatureTypeProvider<string, object?>
+    {
+        private readonly MetadataReader _reader;
+
+        public SignatureTypeProvider(MetadataReader reader)
+        {
+            _reader = reader;
+        }
+
+        public string GetPrimitiveType(PrimitiveTypeCode typeCode) => typeCode switch
+        {
+            PrimitiveTypeCode.Boolean => "bool",
+            PrimitiveTypeCode.Byte => "byte",
+            PrimitiveTypeCode.SByte => "sbyte",
+            PrimitiveTypeCode.Char => "char",
+            PrimitiveTypeCode.Int16 => "short",
+            PrimitiveTypeCode.UInt16 => "ushort",
+            PrimitiveTypeCode.Int32 => "int",
+            PrimitiveTypeCode.UInt32 => "uint",
+            PrimitiveTypeCode.Int64 => "long",
+            PrimitiveTypeCode.UInt64 => "ulong",
+            PrimitiveTypeCode.Single => "float",
+            PrimitiveTypeCode.Double => "double",
+            PrimitiveTypeCode.String => "string",
+            PrimitiveTypeCode.Object => "object",
+            PrimitiveTypeCode.IntPtr => "IntPtr",
+            PrimitiveTypeCode.UIntPtr => "UIntPtr",
+            PrimitiveTypeCode.Void => "void",
+            PrimitiveTypeCode.TypedReference => "TypedReference",
+            _ => typeCode.ToString()
+        };
+
+        public string GetTypeFromDefinition(MetadataReader reader, TypeDefinitionHandle handle, byte rawTypeKind)
+        {
+            var typeDef = reader.GetTypeDefinition(handle);
+            var ns = reader.GetString(typeDef.Namespace);
+            var name = reader.GetString(typeDef.Name);
+            return string.IsNullOrEmpty(ns) ? name : $"{ns}.{name}";
+        }
+
+        public string GetTypeFromReference(MetadataReader reader, TypeReferenceHandle handle, byte rawTypeKind)
+        {
+            var typeRef = reader.GetTypeReference(handle);
+            var ns = reader.GetString(typeRef.Namespace);
+            var name = reader.GetString(typeRef.Name);
+            return string.IsNullOrEmpty(ns) ? name : $"{ns}.{name}";
+        }
+
+        public string GetSZArrayType(string elementType) => $"{elementType}[]";
+        public string GetArrayType(string elementType, ArrayShape shape) => $"{elementType}[{new string(',', shape.Rank - 1)}]";
+        public string GetByReferenceType(string elementType) => $"ref {elementType}";
+        public string GetPointerType(string elementType) => $"{elementType}*";
+        public string GetPinnedType(string elementType) => elementType;
+        public string GetModifiedType(string modifier, string unmodifiedType, bool isRequired) => unmodifiedType;
+
+        public string GetGenericInstantiation(string genericType, ImmutableArray<string> typeArguments)
+        {
+            var name = genericType;
+            var backtick = name.IndexOf('`');
+            if (backtick > 0) name = name.Substring(0, backtick);
+            return $"{name}<{string.Join(", ", typeArguments)}>";
+        }
+
+        public string GetGenericTypeParameter(object? genericContext, int index) => $"T{index}";
+        public string GetGenericMethodParameter(object? genericContext, int index) => $"TM{index}";
+        public string GetFunctionPointerType(MethodSignature<string> signature) => "delegate*";
+        public string GetTypeFromSpecification(MetadataReader reader, object? genericContext, TypeSpecificationHandle handle, byte rawTypeKind)
+        {
+            var spec = reader.GetTypeSpecification(handle);
+            return spec.DecodeSignature(this, genericContext);
+        }
+    }
+
+    /// <inheritdoc />
+    public async Task<Models.Modules.SearchResult> SearchModulesAsync(
+        string pattern,
+        Models.Modules.SearchType searchType = Models.Modules.SearchType.Both,
+        string? moduleFilter = null,
+        bool caseSensitive = false,
+        int maxResults = 50,
+        CancellationToken cancellationToken = default)
+    {
+        if (_process == null)
+        {
+            throw new InvalidOperationException("Cannot search modules: debugger is not attached to any process");
+        }
+
+        // Clamp max results
+        maxResults = Math.Clamp(maxResults, 1, 100);
+
+        var types = new List<Models.Modules.TypeInfo>();
+        var methods = new List<Models.Modules.MethodSearchMatch>();
+        var totalMatches = 0;
+
+        var comparisonType = caseSensitive ? StringComparison.Ordinal : StringComparison.OrdinalIgnoreCase;
+
+        await Task.Run(() =>
+        {
+            var moduleIdCounter = 0;
+            foreach (var appDomain in _process!.AppDomains)
+            {
+                foreach (var assembly in appDomain.Assemblies)
+                {
+                    foreach (var module in assembly.Modules)
+                    {
+                        var info = ExtractModuleInfo(module, ref moduleIdCounter);
+
+                        // Apply module filter
+                        if (moduleFilter != null)
+                        {
+                            if (!MatchesWildcardPattern(info.Name, moduleFilter, caseSensitive) &&
+                                !MatchesWildcardPattern(info.FullName, moduleFilter, caseSensitive))
+                            {
+                                continue;
+                            }
+                        }
+
+                        if (string.IsNullOrEmpty(info.Path) || !File.Exists(info.Path))
+                            continue;
+
+                        try
+                        {
+                            SearchInModule(info, pattern, searchType, caseSensitive,
+                                types, methods, ref totalMatches, maxResults);
+                        }
+                        catch
+                        {
+                            // Skip modules that can't be read
+                        }
+
+                        // Early exit if we have enough results
+                        if (types.Count + methods.Count >= maxResults)
+                            break;
+                    }
+
+                    if (types.Count + methods.Count >= maxResults)
+                        break;
+                }
+
+                if (types.Count + methods.Count >= maxResults)
+                    break;
+            }
+        }, cancellationToken);
+
+        var returnedMatches = types.Count + methods.Count;
+        var truncated = totalMatches > returnedMatches;
+
+        return new Models.Modules.SearchResult(
+            Query: pattern,
+            SearchType: searchType,
+            Types: types.ToArray(),
+            Methods: methods.ToArray(),
+            TotalMatches: totalMatches,
+            ReturnedMatches: returnedMatches,
+            Truncated: truncated,
+            ContinuationToken: truncated ? $"offset:{returnedMatches}" : null);
+    }
+
+    /// <summary>
+    /// Searches for types and methods in a single module.
+    /// </summary>
+    private void SearchInModule(
+        Models.Modules.ModuleInfo moduleInfo,
+        string pattern,
+        Models.Modules.SearchType searchType,
+        bool caseSensitive,
+        List<Models.Modules.TypeInfo> types,
+        List<Models.Modules.MethodSearchMatch> methods,
+        ref int totalMatches,
+        int maxResults)
+    {
+        using var peReader = new PEReader(File.OpenRead(moduleInfo.Path));
+        if (!peReader.HasMetadata)
+            return;
+
+        var reader = peReader.GetMetadataReader();
+
+        // Search types
+        if (searchType == Models.Modules.SearchType.Types || searchType == Models.Modules.SearchType.Both)
+        {
+            foreach (var typeHandle in reader.TypeDefinitions)
+            {
+                var typeDef = reader.GetTypeDefinition(typeHandle);
+                var name = reader.GetString(typeDef.Name);
+                var ns = reader.GetString(typeDef.Namespace);
+                var fullName = string.IsNullOrEmpty(ns) ? name : $"{ns}.{name}";
+
+                // Skip compiler-generated types
+                if (name.StartsWith("<") || name.Contains("AnonymousType"))
+                    continue;
+
+                // Check if matches pattern
+                if (MatchesWildcardPattern(name, pattern, caseSensitive) ||
+                    MatchesWildcardPattern(fullName, pattern, caseSensitive))
+                {
+                    totalMatches++;
+
+                    if (types.Count < maxResults)
+                    {
+                        var typeInfo = BuildTypeInfo(typeDef, reader, moduleInfo.Name);
+                        types.Add(typeInfo);
+                    }
+                }
+            }
+        }
+
+        // Search methods
+        if (searchType == Models.Modules.SearchType.Methods || searchType == Models.Modules.SearchType.Both)
+        {
+            foreach (var typeHandle in reader.TypeDefinitions)
+            {
+                var typeDef = reader.GetTypeDefinition(typeHandle);
+                var typeName = reader.GetString(typeDef.Name);
+                var typeNs = reader.GetString(typeDef.Namespace);
+                var fullTypeName = string.IsNullOrEmpty(typeNs) ? typeName : $"{typeNs}.{typeName}";
+
+                // Skip compiler-generated types
+                if (typeName.StartsWith("<") || typeName.Contains("AnonymousType"))
+                    continue;
+
+                foreach (var methodHandle in typeDef.GetMethods())
+                {
+                    var methodDef = reader.GetMethodDefinition(methodHandle);
+                    var methodName = reader.GetString(methodDef.Name);
+
+                    // Skip special methods
+                    if (methodName.StartsWith("get_") || methodName.StartsWith("set_") ||
+                        methodName.StartsWith("add_") || methodName.StartsWith("remove_") ||
+                        methodName.StartsWith("<"))
+                    {
+                        continue;
+                    }
+
+                    // Check if method name matches pattern
+                    if (MatchesWildcardPattern(methodName, pattern, caseSensitive))
+                    {
+                        totalMatches++;
+
+                        if (methods.Count < maxResults)
+                        {
+                            try
+                            {
+                                var methodInfo = BuildMethodInfo(methodDef, reader, fullTypeName);
+                                methods.Add(new Models.Modules.MethodSearchMatch(
+                                    DeclaringType: fullTypeName,
+                                    ModuleName: moduleInfo.Name,
+                                    Method: methodInfo,
+                                    MatchReason: "name"));
+                            }
+                            catch
+                            {
+                                // Skip methods that can't be decoded
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    /// <summary>
+    /// Builds a MethodMemberInfo from a method definition.
+    /// </summary>
+    private Models.Modules.MethodMemberInfo BuildMethodInfo(
+        MethodDefinition methodDef,
+        MetadataReader reader,
+        string declaringType)
+    {
+        var methodName = reader.GetString(methodDef.Name);
+        var isStatic = (methodDef.Attributes & MethodAttributes.Static) != 0;
+        var isVirtual = (methodDef.Attributes & MethodAttributes.Virtual) != 0;
+        var isAbstract = (methodDef.Attributes & MethodAttributes.Abstract) != 0;
+        var methodVisibility = GetMethodVisibility(methodDef.Attributes);
+
+        // Decode signature
+        var signature = methodDef.DecodeSignature(new SignatureTypeProvider(reader), null);
+        var returnType = signature.ReturnType;
+        var parameters = ReadMethodParameters(methodDef, reader, signature);
+        var genericParams = ReadGenericParameters(methodDef.GetGenericParameters(), reader);
+
+        var signatureStr = BuildMethodSignature(methodName, returnType, parameters, genericParams);
+
+        return new Models.Modules.MethodMemberInfo(
+            Name: methodName,
+            Signature: signatureStr,
+            ReturnType: returnType,
+            Parameters: parameters,
+            Visibility: methodVisibility,
+            IsStatic: isStatic,
+            IsVirtual: isVirtual,
+            IsAbstract: isAbstract,
+            IsGeneric: genericParams.Length > 0,
+            GenericParameters: genericParams.Length > 0 ? genericParams : null,
+            DeclaringType: declaringType);
     }
 
     #endregion

@@ -125,4 +125,21 @@ public static class ErrorCodes
 
     /// <summary>Type not found in loaded modules.</summary>
     public const string TypeNotFound = "TYPE_NOT_FOUND";
+
+    // Module inspection error codes
+
+    /// <summary>Module enumeration failed.</summary>
+    public const string EnumerationFailed = "ENUMERATION_FAILED";
+
+    /// <summary>Module not found in loaded assemblies.</summary>
+    public const string ModuleNotFound = "MODULE_NOT_FOUND";
+
+    /// <summary>Metadata reading failed.</summary>
+    public const string MetadataError = "METADATA_ERROR";
+
+    /// <summary>Search pattern is invalid.</summary>
+    public const string InvalidPattern = "INVALID_PATTERN";
+
+    /// <summary>Search operation failed.</summary>
+    public const string SearchFailed = "SEARCH_FAILED";
 }

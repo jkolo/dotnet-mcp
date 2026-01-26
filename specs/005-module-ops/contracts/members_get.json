@@ -1,0 +1,258 @@
+{
+  "$schema": "https://json-schema.org/draft/2020-12/schema",
+  "title": "members_get",
+  "description": "Inspect members of a type (methods, properties, fields, events)",
+  "type": "object",
+  "properties": {
+    "tool": {
+      "const": "members_get"
+    },
+    "parameters": {
+      "type": "object",
+      "properties": {
+        "type_name": {
+          "type": "string",
+          "description": "Full type name to inspect (e.g., 'MyApp.Models.Customer')"
+        },
+        "module_name": {
+          "type": "string",
+          "description": "Module containing the type (optional, searches all if omitted)"
+        },
+        "include_inherited": {
+          "type": "boolean",
+          "description": "Include members inherited from base classes (default: false)",
+          "default": false
+        },
+        "member_kinds": {
+          "type": "array",
+          "items": {
+            "type": "string",
+            "enum": ["methods", "properties", "fields", "events"]
+          },
+          "description": "Which member kinds to include (default: all)",
+          "default": ["methods", "properties", "fields", "events"]
+        },
+        "visibility": {
+          "type": "string",
+          "enum": ["public", "all"],
+          "description": "Filter by visibility (default: all)",
+          "default": "all"
+        },
+        "include_static": {
+          "type": "boolean",
+          "description": "Include static members (default: true)",
+          "default": true
+        },
+        "include_instance": {
+          "type": "boolean",
+          "description": "Include instance members (default: true)",
+          "default": true
+        }
+      },
+      "required": ["type_name"],
+      "additionalProperties": false
+    }
+  },
+  "required": ["tool", "parameters"],
+  "response": {
+    "type": "object",
+    "properties": {
+      "success": {
+        "type": "boolean"
+      },
+      "typeName": {
+        "type": "string",
+        "description": "Full type name that was inspected"
+      },
+      "methods": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": { "type": "string" },
+            "signature": { "type": "string", "description": "Full method signature" },
+            "returnType": { "type": "string" },
+            "parameters": {
+              "type": "array",
+              "items": {
+                "type": "object",
+                "properties": {
+                  "name": { "type": "string" },
+                  "type": { "type": "string" },
+                  "isOptional": { "type": "boolean" },
+                  "isOut": { "type": "boolean" },
+                  "isRef": { "type": "boolean" }
+                }
+              }
+            },
+            "visibility": { "type": "string" },
+            "isStatic": { "type": "boolean" },
+            "isVirtual": { "type": "boolean" },
+            "isAbstract": { "type": "boolean" },
+            "isGeneric": { "type": "boolean" },
+            "genericParameters": {
+              "type": "array",
+              "items": { "type": "string" }
+            },
+            "declaringType": { "type": "string" }
+          },
+          "required": ["name", "signature", "returnType", "visibility", "isStatic"]
+        }
+      },
+      "properties": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": { "type": "string" },
+            "type": { "type": "string" },
+            "visibility": { "type": "string" },
+            "isStatic": { "type": "boolean" },
+            "hasGetter": { "type": "boolean" },
+            "hasSetter": { "type": "boolean" },
+            "isIndexer": { "type": "boolean" }
+          },
+          "required": ["name", "type", "visibility", "isStatic"]
+        }
+      },
+      "fields": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": { "type": "string" },
+            "type": { "type": "string" },
+            "visibility": { "type": "string" },
+            "isStatic": { "type": "boolean" },
+            "isReadOnly": { "type": "boolean" },
+            "isConst": { "type": "boolean" },
+            "constValue": { "type": ["string", "null"] }
+          },
+          "required": ["name", "type", "visibility", "isStatic"]
+        }
+      },
+      "events": {
+        "type": "array",
+        "items": {
+          "type": "object",
+          "properties": {
+            "name": { "type": "string" },
+            "type": { "type": "string" },
+            "visibility": { "type": "string" },
+            "isStatic": { "type": "boolean" }
+          },
+          "required": ["name", "type", "visibility", "isStatic"]
+        }
+      },
+      "includesInherited": {
+        "type": "boolean",
+        "description": "Whether inherited members are included"
+      },
+      "methodCount": { "type": "integer" },
+      "propertyCount": { "type": "integer" },
+      "fieldCount": { "type": "integer" },
+      "eventCount": { "type": "integer" },
+      "error": {
+        "$ref": "#/$defs/error"
+      }
+    },
+    "required": ["success"]
+  },
+  "$defs": {
+    "error": {
+      "type": "object",
+      "properties": {
+        "code": {
+          "type": "string",
+          "enum": ["NO_SESSION", "TYPE_NOT_FOUND", "MODULE_NOT_FOUND", "METADATA_ERROR"]
+        },
+        "message": {
+          "type": "string"
+        },
+        "details": {
+          "type": "object"
+        }
+      },
+      "required": ["code", "message"]
+    }
+  },
+  "examples": [
+    {
+      "request": {
+        "tool": "members_get",
+        "parameters": {
+          "type_name": "MyApp.Models.Customer",
+          "include_inherited": false
+        }
+      },
+      "response": {
+        "success": true,
+        "typeName": "MyApp.Models.Customer",
+        "methods": [
+          {
+            "name": "GetOrders",
+            "signature": "List<Order> GetOrders()",
+            "returnType": "System.Collections.Generic.List<MyApp.Models.Order>",
+            "parameters": [],
+            "visibility": "public",
+            "isStatic": false,
+            "isVirtual": false,
+            "isAbstract": false,
+            "isGeneric": false,
+            "declaringType": "MyApp.Models.Customer"
+          },
+          {
+            "name": "AddOrder",
+            "signature": "void AddOrder(Order order)",
+            "returnType": "System.Void",
+            "parameters": [
+              { "name": "order", "type": "MyApp.Models.Order", "isOptional": false, "isOut": false, "isRef": false }
+            ],
+            "visibility": "public",
+            "isStatic": false,
+            "isVirtual": false,
+            "isAbstract": false,
+            "isGeneric": false,
+            "declaringType": "MyApp.Models.Customer"
+          }
+        ],
+        "properties": [
+          {
+            "name": "Id",
+            "type": "System.Int32",
+            "visibility": "public",
+            "isStatic": false,
+            "hasGetter": true,
+            "hasSetter": true,
+            "isIndexer": false
+          },
+          {
+            "name": "Name",
+            "type": "System.String",
+            "visibility": "public",
+            "isStatic": false,
+            "hasGetter": true,
+            "hasSetter": true,
+            "isIndexer": false
+          }
+        ],
+        "fields": [
+          {
+            "name": "_orders",
+            "type": "System.Collections.Generic.List<MyApp.Models.Order>",
+            "visibility": "private",
+            "isStatic": false,
+            "isReadOnly": false,
+            "isConst": false
+          }
+        ],
+        "events": [],
+        "includesInherited": false,
+        "methodCount": 2,
+        "propertyCount": 2,
+        "fieldCount": 1,
+        "eventCount": 0
+      }
+    }
+  ]
+}

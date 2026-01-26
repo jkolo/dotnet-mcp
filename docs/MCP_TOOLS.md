@@ -1128,6 +1128,352 @@ Get the memory layout of a type including field offsets, sizes, and padding.
 
 ---
 
+## Module Inspection
+
+Module inspection tools allow browsing loaded assemblies, exploring types, and searching across modules. These operations work with both **running** and **paused** sessions (they only read metadata).
+
+### modules_list
+
+List all loaded modules (assemblies) in the debugged process.
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `include_system` | boolean | No | Include system assemblies like mscorlib (default: true) |
+| `name_filter` | string | No | Filter modules by name pattern (supports * wildcard) |
+
+**Example:**
+```json
+{
+  "include_system": false,
+  "name_filter": "MyApp*"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "modules": [
+    {
+      "name": "MyApp",
+      "path": "/app/MyApp.dll",
+      "version": "1.0.0.0",
+      "hasSymbols": true,
+      "isOptimized": false,
+      "isDynamic": false,
+      "moduleId": "550e8400-e29b-41d4-a716-446655440000"
+    },
+    {
+      "name": "MyApp.Core",
+      "path": "/app/MyApp.Core.dll",
+      "version": "1.0.0.0",
+      "hasSymbols": true,
+      "isOptimized": false,
+      "isDynamic": false,
+      "moduleId": "550e8400-e29b-41d4-a716-446655440001"
+    }
+  ],
+  "count": 2
+}
+```
+
+**Errors:**
+- `NO_SESSION` — No active debug session
+
+---
+
+### types_get
+
+Get types defined in a module, organized by namespace.
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `module_name` | string | Yes | Module name to browse |
+| `namespace_filter` | string | No | Filter by namespace pattern (supports * wildcard) |
+| `kind` | string | No | Filter by type kind: class, interface, struct, enum, delegate |
+| `visibility` | string | No | Filter by visibility: public, internal, private, protected |
+| `max_results` | integer | No | Maximum types to return (default: 100) |
+| `continuation_token` | string | No | Token for pagination |
+
+**Example:**
+```json
+{
+  "module_name": "MyApp",
+  "namespace_filter": "MyApp.Services*",
+  "kind": "class",
+  "visibility": "public"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "moduleName": "MyApp",
+  "types": [
+    {
+      "fullName": "MyApp.Services.UserService",
+      "name": "UserService",
+      "namespace": "MyApp.Services",
+      "kind": "class",
+      "visibility": "public",
+      "isAbstract": false,
+      "genericParameters": [],
+      "isGeneric": false,
+      "baseType": "System.Object",
+      "interfaces": ["MyApp.Services.IUserService"],
+      "moduleName": "MyApp"
+    },
+    {
+      "fullName": "MyApp.Services.OrderService",
+      "name": "OrderService",
+      "namespace": "MyApp.Services",
+      "kind": "class",
+      "visibility": "public",
+      "isAbstract": false,
+      "genericParameters": [],
+      "isGeneric": false,
+      "baseType": "System.Object",
+      "interfaces": ["MyApp.Services.IOrderService"],
+      "moduleName": "MyApp"
+    }
+  ],
+  "namespaces": [
+    {
+      "name": "MyApp.Services",
+      "typeCount": 2
+    }
+  ],
+  "totalTypes": 2,
+  "returnedTypes": 2,
+  "hasMore": false,
+  "continuationToken": null
+}
+```
+
+**Errors:**
+- `NO_SESSION` — No active debug session
+- `MODULE_NOT_FOUND` — Module with given name not found
+
+---
+
+### members_get
+
+Get members (methods, properties, fields, events) of a type.
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `type_name` | string | Yes | Full type name to inspect (e.g., "MyApp.Models.Customer") |
+| `module_name` | string | No | Module containing the type (helps resolve ambiguous types) |
+| `include_inherited` | boolean | No | Include inherited members from base types (default: false) |
+| `member_kinds` | string | No | Comma-separated list: methods, properties, fields, events |
+| `visibility` | string | No | Filter by visibility: public, internal, private, protected |
+| `include_static` | boolean | No | Include static members (default: true) |
+| `include_instance` | boolean | No | Include instance members (default: true) |
+
+**Example:**
+```json
+{
+  "type_name": "MyApp.Models.Customer",
+  "include_inherited": true,
+  "member_kinds": "methods,properties",
+  "visibility": "public"
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "typeName": "MyApp.Models.Customer",
+  "moduleName": "MyApp",
+  "methods": [
+    {
+      "name": "GetFullName",
+      "signature": "string GetFullName()",
+      "returnType": "string",
+      "parameters": [],
+      "visibility": "public",
+      "isStatic": false,
+      "isVirtual": false,
+      "isAbstract": false,
+      "isOverride": false,
+      "genericParameters": null,
+      "declaringType": "MyApp.Models.Customer"
+    },
+    {
+      "name": "UpdateEmail",
+      "signature": "void UpdateEmail(string email)",
+      "returnType": "void",
+      "parameters": [
+        {
+          "name": "email",
+          "type": "string",
+          "isOptional": false,
+          "isOut": false,
+          "isRef": false,
+          "defaultValue": null
+        }
+      ],
+      "visibility": "public",
+      "isStatic": false,
+      "isVirtual": false,
+      "isAbstract": false,
+      "isOverride": false,
+      "genericParameters": null,
+      "declaringType": "MyApp.Models.Customer"
+    }
+  ],
+  "properties": [
+    {
+      "name": "Id",
+      "type": "int",
+      "visibility": "public",
+      "isStatic": false,
+      "hasGetter": true,
+      "hasSetter": true,
+      "declaringType": "MyApp.Models.Customer"
+    },
+    {
+      "name": "Name",
+      "type": "string",
+      "visibility": "public",
+      "isStatic": false,
+      "hasGetter": true,
+      "hasSetter": true,
+      "declaringType": "MyApp.Models.Customer"
+    }
+  ],
+  "fields": [],
+  "events": []
+}
+```
+
+**Errors:**
+- `NO_SESSION` — No active debug session
+- `TYPE_NOT_FOUND` — Type with given name not found
+
+---
+
+### modules_search
+
+Search for types and methods across all loaded modules.
+
+**Parameters:**
+
+| Name | Type | Required | Description |
+|------|------|----------|-------------|
+| `pattern` | string | Yes | Search pattern (supports * wildcard: *prefix, suffix*, *contains*) |
+| `search_type` | string | No | What to search: types, methods, or both (default: both) |
+| `module_filter` | string | No | Limit search to specific module (supports * wildcard) |
+| `case_sensitive` | boolean | No | Enable case-sensitive matching (default: false) |
+| `max_results` | integer | No | Maximum results to return (max: 100, default: 50) |
+
+**Example:**
+```json
+{
+  "pattern": "*Customer*",
+  "search_type": "both",
+  "module_filter": "MyApp*",
+  "case_sensitive": false,
+  "max_results": 50
+}
+```
+
+**Response:**
+```json
+{
+  "success": true,
+  "query": "*Customer*",
+  "searchType": "both",
+  "types": [
+    {
+      "fullName": "MyApp.Models.Customer",
+      "name": "Customer",
+      "namespace": "MyApp.Models",
+      "kind": "class",
+      "visibility": "public",
+      "moduleName": "MyApp"
+    },
+    {
+      "fullName": "MyApp.Services.CustomerService",
+      "name": "CustomerService",
+      "namespace": "MyApp.Services",
+      "kind": "class",
+      "visibility": "public",
+      "moduleName": "MyApp"
+    }
+  ],
+  "methods": [
+    {
+      "declaringType": "MyApp.Services.CustomerService",
+      "moduleName": "MyApp",
+      "matchReason": "name",
+      "method": {
+        "name": "GetCustomer",
+        "signature": "Customer GetCustomer(int id)",
+        "returnType": "Customer",
+        "visibility": "public",
+        "isStatic": false
+      }
+    },
+    {
+      "declaringType": "MyApp.Services.CustomerService",
+      "moduleName": "MyApp",
+      "matchReason": "name",
+      "method": {
+        "name": "UpdateCustomer",
+        "signature": "void UpdateCustomer(Customer customer)",
+        "returnType": "void",
+        "visibility": "public",
+        "isStatic": false
+      }
+    }
+  ],
+  "totalMatches": 4,
+  "returnedMatches": 4,
+  "truncated": false,
+  "continuationToken": null
+}
+```
+
+**Response (truncated results):**
+```json
+{
+  "success": true,
+  "query": "*String*",
+  "searchType": "types",
+  "types": [
+    {
+      "fullName": "System.String",
+      "name": "String",
+      "namespace": "System",
+      "kind": "class",
+      "visibility": "public",
+      "moduleName": "System.Private.CoreLib"
+    }
+  ],
+  "methods": [],
+  "totalMatches": 150,
+  "returnedMatches": 50,
+  "truncated": true,
+  "continuationToken": "next-page-token"
+}
+```
+
+**Errors:**
+- `NO_SESSION` — No active debug session
+- `INVALID_PATTERN` — Search pattern cannot be empty
+- `SEARCH_FAILED` — Search operation failed
+
+---
+
 ## Error Responses
 
 All tools may return errors in this format:
@@ -1167,3 +1513,6 @@ All tools may return errors in this format:
 | `SIZE_EXCEEDED` | Requested size exceeds limit |
 | `DEPTH_EXCEEDED` | Object inspection depth exceeded limit |
 | `TYPE_NOT_FOUND` | Cannot find type with given name |
+| `MODULE_NOT_FOUND` | Module with given name not found |
+| `INVALID_PATTERN` | Search pattern is invalid or empty |
+| `SEARCH_FAILED` | Module search operation failed |

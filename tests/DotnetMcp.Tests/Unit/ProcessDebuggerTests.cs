@@ -534,4 +534,84 @@ public class ProcessDebuggerTests
         await act.Should().ThrowAsync<InvalidOperationException>()
             .WithMessage("*not attached*");
     }
+
+    // ===== Module Inspection Tests =====
+
+    [Fact]
+    public async Task GetModulesAsync_WhenNotAttached_ThrowsInvalidOperationException()
+    {
+        // Arrange - fresh instance (not attached)
+
+        // Act
+        var act = async () => await _sut.GetModulesAsync();
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*not attached*");
+    }
+
+    [Fact]
+    public async Task GetModulesAsync_WithNameFilter_WhenNotAttached_ThrowsInvalidOperationException()
+    {
+        // Arrange - fresh instance (not attached)
+
+        // Act
+        var act = async () => await _sut.GetModulesAsync(nameFilter: "MyApp*");
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*not attached*");
+    }
+
+    [Fact]
+    public async Task GetModulesAsync_WithIncludeSystemFalse_WhenNotAttached_ThrowsInvalidOperationException()
+    {
+        // Arrange - fresh instance (not attached)
+
+        // Act
+        var act = async () => await _sut.GetModulesAsync(includeSystem: false);
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*not attached*");
+    }
+
+    [Fact]
+    public async Task GetTypesAsync_WhenNotAttached_ThrowsInvalidOperationException()
+    {
+        // Arrange - fresh instance (not attached)
+
+        // Act
+        var act = async () => await _sut.GetTypesAsync("TestModule");
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*not attached*");
+    }
+
+    [Fact]
+    public async Task GetMembersAsync_WhenNotAttached_ThrowsInvalidOperationException()
+    {
+        // Arrange - fresh instance (not attached)
+
+        // Act
+        var act = async () => await _sut.GetMembersAsync("TestType");
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*not attached*");
+    }
+
+    [Fact]
+    public async Task SearchModulesAsync_WhenNotAttached_ThrowsInvalidOperationException()
+    {
+        // Arrange - fresh instance (not attached)
+
+        // Act
+        var act = async () => await _sut.SearchModulesAsync("*Controller");
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*not attached*");
+    }
 }

@@ -1,6 +1,7 @@
 using DotnetMcp.Models;
 using DotnetMcp.Models.Inspection;
 using DotnetMcp.Models.Memory;
+using DotnetMcp.Models.Modules;
 
 namespace DotnetMcp.Services;
 
@@ -261,6 +262,88 @@ public interface IProcessDebugger
         bool includePadding = true,
         int? threadId = null,
         int frameIndex = 0,
+        CancellationToken cancellationToken = default);
+
+    // Module inspection operations
+
+    /// <summary>
+    /// Gets all loaded modules (assemblies) in the debuggee process.
+    /// Works with both running and paused sessions.
+    /// </summary>
+    /// <param name="includeSystem">Include system/framework assemblies.</param>
+    /// <param name="nameFilter">Filter modules by name pattern (supports * wildcard).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>List of loaded modules.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when not attached.</exception>
+    Task<IReadOnlyList<ModuleInfo>> GetModulesAsync(
+        bool includeSystem = true,
+        string? nameFilter = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets types defined in a module.
+    /// Works with both running and paused sessions.
+    /// </summary>
+    /// <param name="moduleName">Module name to browse.</param>
+    /// <param name="namespaceFilter">Filter to specific namespace (supports * wildcard).</param>
+    /// <param name="kind">Filter by type kind (null = all).</param>
+    /// <param name="visibility">Filter by visibility (null = all).</param>
+    /// <param name="maxResults">Maximum types to return (default: 100, max: 500).</param>
+    /// <param name="continuationToken">Token for fetching next page.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Types result with namespace hierarchy.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when not attached.</exception>
+    Task<TypesResult> GetTypesAsync(
+        string moduleName,
+        string? namespaceFilter = null,
+        TypeKind? kind = null,
+        Visibility? visibility = null,
+        int maxResults = 100,
+        string? continuationToken = null,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Gets members of a type (methods, properties, fields, events).
+    /// Works with both running and paused sessions.
+    /// </summary>
+    /// <param name="typeName">Full type name to inspect.</param>
+    /// <param name="moduleName">Module containing the type (optional, searches all if null).</param>
+    /// <param name="includeInherited">Include inherited members.</param>
+    /// <param name="memberKinds">Which member kinds to include (null = all).</param>
+    /// <param name="visibility">Filter by visibility (null = all).</param>
+    /// <param name="includeStatic">Include static members.</param>
+    /// <param name="includeInstance">Include instance members.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Type members result.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when not attached.</exception>
+    Task<TypeMembersResult> GetMembersAsync(
+        string typeName,
+        string? moduleName = null,
+        bool includeInherited = false,
+        string[]? memberKinds = null,
+        Visibility? visibility = null,
+        bool includeStatic = true,
+        bool includeInstance = true,
+        CancellationToken cancellationToken = default);
+
+    /// <summary>
+    /// Searches for types or methods across all modules.
+    /// Works with both running and paused sessions.
+    /// </summary>
+    /// <param name="pattern">Search pattern (supports * wildcard).</param>
+    /// <param name="searchType">What to search (Types, Methods, Both).</param>
+    /// <param name="moduleFilter">Limit search to specific module (supports * wildcard).</param>
+    /// <param name="caseSensitive">Case-sensitive matching.</param>
+    /// <param name="maxResults">Maximum results to return (default: 50, max: 100).</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>Search results.</returns>
+    /// <exception cref="InvalidOperationException">Thrown when not attached.</exception>
+    Task<SearchResult> SearchModulesAsync(
+        string pattern,
+        SearchType searchType = SearchType.Both,
+        string? moduleFilter = null,
+        bool caseSensitive = false,
+        int maxResults = 50,
         CancellationToken cancellationToken = default);
 }
 
