@@ -48,6 +48,22 @@ while (true)
             Console.Out.Flush();
             break;
 
+        case "object":
+            // Create and process object - for nested property inspection testing
+            var objectTarget = new ObjectTarget("TestUser");
+            objectTarget.ProcessUser();
+            Console.WriteLine("OBJECT_DONE");
+            Console.Out.Flush();
+            break;
+
+        case "deep":
+            // 5-level nesting test - for deep property chain testing (T044)
+            var deepTarget = new DeepNestingTarget();
+            deepTarget.ProcessCompany();
+            Console.WriteLine("DEEP_DONE");
+            Console.Out.Flush();
+            break;
+
         default:
             Console.WriteLine($"UNKNOWN_COMMAND:{command}");
             Console.Out.Flush();

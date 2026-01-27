@@ -12,6 +12,7 @@ Auto-generated from all feature plans. Last updated: 2026-01-17
 - C# / .NET 10.0 + ClrDebug (ICorDebug wrappers), ModelContextProtocol SDK + ClrDebug (for ICorDebug APIs), System.Reflection.Metadata (for metadata), (004-memory-ops)
 - C# / .NET 10.0 + ClrDebug (ICorDebug wrappers), ModelContextProtocol SDK + ClrDebug (for ICorDebug APIs), System.Reflection.Metadata (for metadata reading), (005-module-ops)
 - N/A (in-memory, reads module metadata on demand) (005-module-ops)
+- N/A (in-memory debug session state) (006-fix-debugger-bugs)
 
 - C# / .NET 10.0 + Microsoft.Diagnostics.Runtime (ClrMD), System.Text.Json, (001-debug-session)
 
@@ -31,9 +32,9 @@ tests/
 C# / .NET 10.0: Follow standard conventions
 
 ## Recent Changes
+- 006-fix-debugger-bugs: Added C# / .NET 10.0 + ClrDebug (ICorDebug wrappers), ModelContextProtocol SDK, System.Reflection.Metadata
 - 005-module-ops: Added C# / .NET 10.0 + ClrDebug (ICorDebug wrappers), ModelContextProtocol SDK + ClrDebug (for ICorDebug APIs), System.Reflection.Metadata (for metadata reading),
 - 004-memory-ops: Added C# / .NET 10.0 + ClrDebug (ICorDebug wrappers), ModelContextProtocol SDK + ClrDebug (for ICorDebug APIs), System.Reflection.Metadata (for metadata),
-- 003-inspection-ops: Added C# / .NET 10.0 + ClrDebug (ICorDebug wrappers), ModelContextProtocol SDK + ClrDebug (for ICorDebug APIs), System.Reflection.Metadata (for PDB parsing),
 
 
 <!-- MANUAL ADDITIONS START -->

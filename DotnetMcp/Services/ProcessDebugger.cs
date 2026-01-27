@@ -249,12 +249,15 @@ public sealed class ProcessDebugger : IProcessDebugger, IDisposable
                 {
                     try
                     {
-                        // Stop the process before detaching to ensure it's synchronized
-                        _process.Stop(0);
+                        // BUGFIX: Must continue the process before detaching.
+                        // ICorDebug cannot detach from a stopped/paused process.
+                        // The process will continue running after we detach.
+                        _logger.LogDebug("Continuing process before detach");
+                        _process.Continue(false);
                     }
                     catch (Exception ex)
                     {
-                        _logger.LogDebug(ex, "Stop before detach failed (may already be stopped)");
+                        _logger.LogDebug(ex, "Continue before detach failed (process may have exited)");
                     }
 
                     try
@@ -268,10 +271,26 @@ public sealed class ProcessDebugger : IProcessDebugger, IDisposable
                     _process = null;
                 }
 
-                // Note: Don't call _corDebug.Terminate() here - after detach the process
-                // continues running and ICorDebug may still have references.
-                // Terminate should only be called when the debugged process has exited.
-                // _corDebug can be reused for subsequent attach/launch operations.
+                // BUGFIX: Terminate ICorDebug instance after detach to allow reattachment.
+                // The previous comment was incorrect - ICorDebug cannot be reused after detach
+                // because the managed callback and internal state are invalidated.
+                // Without this, subsequent attach operations fail with ERROR_INVALID_PARAMETER.
+                if (_corDebug != null)
+                {
+                    try
+                    {
+                        _logger.LogDebug("Terminating ICorDebug instance after detach");
+                        _corDebug.Terminate();
+                    }
+                    catch (Exception ex)
+                    {
+                        // Safe to ignore - may get CORDBG_E_ILLEGAL_SHUTDOWN_ORDER if process
+                        // was detached but is still running, or other cleanup errors
+                        _logger.LogDebug(ex, "ICorDebug.Terminate() after detach (safe to ignore)");
+                    }
+                    _corDebug = null;
+                    _logger.LogDebug("ICorDebug instance released, ready for new attachment");
+                }
 
                 UpdateState(SessionState.Disconnected);
             }
@@ -2500,33 +2519,68 @@ public sealed class ProcessDebugger : IProcessDebugger, IDisposable
 
             // Get metadata to find the property getter
             var metaImport = module.GetMetaDataInterface<ClrDebug.MetaDataImport>();
-            var typeToken = (int)classType.Token;
 
             // Look for get_PropertyName method
             var getterName = $"get_{propertyName}";
 
-            // Enumerate methods on the type
-            var methodEnum = metaImport.EnumMethods(typeToken);
-            foreach (var methodToken in methodEnum)
+            // Traverse the type hierarchy (current type and base types)
+            var currentTypeToken = (int)classType.Token;
+            while (currentTypeToken != 0)
             {
-                try
+                // Enumerate methods on the current type
+                var methodEnum = metaImport.EnumMethods(currentTypeToken);
+                foreach (var methodToken in methodEnum)
                 {
-                    var methodProps = metaImport.GetMethodProps(methodToken);
-                    if (methodProps.szMethod == getterName)
+                    try
                     {
-                        // Found the getter - get the function
-                        return module.GetFunctionFromToken((uint)methodToken);
+                        var methodProps = metaImport.GetMethodProps(methodToken);
+                        if (methodProps.szMethod == getterName)
+                        {
+                            // Found the getter - get the function
+                            return module.GetFunctionFromToken((uint)methodToken);
+                        }
+                    }
+                    catch
+                    {
+                        // Skip methods we can't inspect
                     }
                 }
-                catch
+
+                // Get base type token
+                try
                 {
-                    // Skip methods we can't inspect
+                    var typeProps = metaImport.GetTypeDefProps(currentTypeToken);
+                    var baseTypeToken = (int)typeProps.ptkExtends;
+
+                    // Check if base type is a TypeDef in this module or a TypeRef (external)
+                    if (baseTypeToken == 0 || baseTypeToken == 0x01000000) // nil token or System.Object TypeRef
+                    {
+                        break; // No more base types to check
+                    }
+
+                    // If it's a TypeDef (0x02xxxxxx), continue traversal
+                    if ((baseTypeToken & 0xFF000000) == 0x02000000)
+                    {
+                        currentTypeToken = baseTypeToken;
+                        _logger.LogDebug("Traversing to base type {BaseTypeToken:X8} for property getter '{PropertyName}'",
+                            baseTypeToken, propertyName);
+                    }
+                    else
+                    {
+                        // TypeRef (0x01xxxxxx) - cross-module base type, stop here
+                        // (Would need to resolve to the actual module to continue)
+                        _logger.LogDebug("Base type {BaseTypeToken:X8} is in another module, stopping traversal",
+                            baseTypeToken);
+                        break;
+                    }
+                }
+                catch (Exception ex)
+                {
+                    _logger.LogDebug(ex, "Error getting base type for property getter lookup");
+                    break;
                 }
             }
 
-            // Check base types if not found
-            // This would require walking the type hierarchy, which is complex
-            // For now, just return null if not found in the immediate type
             return null;
         }
         catch (Exception ex)
@@ -2970,22 +3024,62 @@ public sealed class ProcessDebugger : IProcessDebugger, IDisposable
                 var module = objClass.Module;
                 var metaImport = module.GetMetaDataInterface<ClrDebug.MetaDataImport>();
 
-                // Find the field
-                var fields = metaImport.EnumFields((int)objClass.Token).ToList();
-                foreach (var fieldToken in fields)
+                // Traverse the type hierarchy (current type and base types)
+                var currentTypeToken = (int)objClass.Token;
+                while (currentTypeToken != 0)
                 {
-                    try
+                    // Find the field in current type
+                    var fields = metaImport.EnumFields(currentTypeToken).ToList();
+                    foreach (var fieldToken in fields)
                     {
-                        var fieldProps = metaImport.GetFieldProps(fieldToken);
-                        if (fieldProps.szField == fieldName)
+                        try
                         {
-                            // Use the Raw property to get the ICorDebugClass interface
-                            return objValue.GetFieldValue(objClass.Raw, (int)fieldToken);
+                            var fieldProps = metaImport.GetFieldProps(fieldToken);
+                            if (fieldProps.szField == fieldName)
+                            {
+                                // Get the class for the type that owns this field
+                                var fieldClass = module.GetClassFromToken((uint)currentTypeToken);
+                                return objValue.GetFieldValue(fieldClass.Raw, (int)fieldToken);
+                            }
+                        }
+                        catch
+                        {
+                            // Continue to next field
                         }
                     }
-                    catch
+
+                    // Get base type token
+                    try
                     {
-                        // Continue to next field
+                        var typeProps = metaImport.GetTypeDefProps(currentTypeToken);
+                        var baseTypeToken = (int)typeProps.ptkExtends;
+
+                        // Check if base type is a TypeDef in this module or a TypeRef (external)
+                        if (baseTypeToken == 0 || baseTypeToken == 0x01000000) // nil token or System.Object TypeRef
+                        {
+                            break; // No more base types to check
+                        }
+
+                        // If it's a TypeDef (0x02xxxxxx), continue traversal
+                        if ((baseTypeToken & 0xFF000000) == 0x02000000)
+                        {
+                            currentTypeToken = baseTypeToken;
+                            _logger.LogDebug("Traversing to base type {BaseTypeToken:X8} for field '{FieldName}'",
+                                baseTypeToken, fieldName);
+                        }
+                        else
+                        {
+                            // TypeRef (0x01xxxxxx) - cross-module base type, stop here
+                            // (Would need to resolve to the actual module to continue)
+                            _logger.LogDebug("Base type {BaseTypeToken:X8} is in another module, stopping traversal",
+                                baseTypeToken);
+                            break;
+                        }
+                    }
+                    catch (Exception ex)
+                    {
+                        _logger.LogDebug(ex, "Error getting base type for field lookup");
+                        break;
                     }
                 }
             }
@@ -2995,6 +3089,64 @@ public sealed class ProcessDebugger : IProcessDebugger, IDisposable
             _logger.LogDebug(ex, "Error getting field '{FieldName}'", fieldName);
         }
 
+        return null;
+    }
+
+    /// <summary>
+    /// Attempts to resolve a member (field or property) value from an object.
+    /// First tries direct field access, then backing field, then property getter.
+    /// </summary>
+    /// <param name="parentValue">The parent object value.</param>
+    /// <param name="memberName">The name of the member to access.</param>
+    /// <param name="thread">Optional thread for property getter evaluation.</param>
+    /// <param name="timeoutMs">Timeout for property getter evaluation.</param>
+    /// <param name="cancellationToken">Cancellation token.</param>
+    /// <returns>The member value, or null if not found.</returns>
+    private async Task<CorDebugValue?> TryGetMemberValueAsync(
+        CorDebugValue parentValue,
+        string memberName,
+        CorDebugThread? thread = null,
+        int timeoutMs = 5000,
+        CancellationToken cancellationToken = default)
+    {
+        // 1. Try direct field access
+        var fieldValue = TryGetFieldValue(parentValue, memberName);
+        if (fieldValue != null)
+        {
+            _logger.LogDebug("Resolved '{MemberName}' as direct field", memberName);
+            return fieldValue;
+        }
+
+        // 2. Try auto-property backing field (<Name>k__BackingField)
+        var backingFieldName = $"<{memberName}>k__BackingField";
+        fieldValue = TryGetFieldValue(parentValue, backingFieldName);
+        if (fieldValue != null)
+        {
+            _logger.LogDebug("Resolved '{MemberName}' via backing field '{BackingFieldName}'", memberName, backingFieldName);
+            return fieldValue;
+        }
+
+        // 3. Try property getter (requires thread for ICorDebugEval)
+        if (thread != null)
+        {
+            var getter = FindPropertyGetter(parentValue, memberName);
+            if (getter != null)
+            {
+                _logger.LogDebug("Calling property getter for '{MemberName}' via ICorDebugEval", memberName);
+                var result = await CallFunctionAsync(thread, getter, parentValue, null, timeoutMs, cancellationToken);
+                if (result.Success && result.Value != null)
+                {
+                    return result.Value;
+                }
+
+                if (result.Exception != null)
+                {
+                    _logger.LogDebug(result.Exception, "Property getter for '{MemberName}' threw exception", memberName);
+                }
+            }
+        }
+
+        _logger.LogDebug("Could not resolve member '{MemberName}'", memberName);
         return null;
     }
 
@@ -3034,13 +3186,15 @@ public sealed class ProcessDebugger : IProcessDebugger, IDisposable
     #region Memory Inspection Operations
 
     /// <inheritdoc />
-    public Task<ObjectInspection> InspectObjectAsync(
+    public async Task<ObjectInspection> InspectObjectAsync(
         string objectRef,
         int depth = 1,
         int? threadId = null,
         int frameIndex = 0,
         CancellationToken cancellationToken = default)
     {
+        CorDebugThread? thread;
+
         lock (_lock)
         {
             if (_process == null)
@@ -3053,23 +3207,110 @@ public sealed class ProcessDebugger : IProcessDebugger, IDisposable
                 throw new InvalidOperationException($"Cannot inspect object: process is not paused (current state: {_currentState})");
             }
 
-            _logger.LogDebug("Inspecting object '{ObjectRef}' with depth {Depth}", objectRef, depth);
-
-            // Resolve the expression to get the object value
-            var value = ResolveExpressionToValue(objectRef, threadId, frameIndex);
-
-            if (value == null)
-            {
-                throw new InvalidOperationException($"Invalid reference: could not resolve '{objectRef}'");
-            }
-
-            var visitedAddresses = new HashSet<ulong>();
-            return Task.FromResult(InspectObjectValue(value, depth, visitedAddresses));
+            // Get thread for property getter evaluation (needed for ICorDebugEval)
+            thread = GetThread(threadId);
         }
+
+        _logger.LogDebug("Inspecting object '{ObjectRef}' with depth {Depth}", objectRef, depth);
+
+        // Resolve the expression to get the object value (async for property getter support)
+        var (value, errorMessage) = await ResolveExpressionToValueAsync(
+            objectRef,
+            threadId,
+            frameIndex,
+            thread,
+            cancellationToken);
+
+        if (value == null)
+        {
+            throw new InvalidOperationException($"Invalid reference: {errorMessage ?? $"could not resolve '{objectRef}'"}");
+        }
+
+        var visitedAddresses = new HashSet<ulong>();
+        return InspectObjectValue(value, depth, visitedAddresses);
     }
 
     /// <summary>
     /// Resolves an expression to a CorDebugValue.
+    /// Supports nested property paths like 'this._field.Property'.
+    /// </summary>
+    /// <param name="expression">The expression to resolve (e.g., "this._currentUser.HomeAddress")</param>
+    /// <param name="threadId">Thread ID for ICorDebugEval (required for property getter calls)</param>
+    /// <param name="frameIndex">Stack frame index</param>
+    /// <param name="thread">Thread for property getter evaluation (can be null for field-only access)</param>
+    /// <param name="cancellationToken">Cancellation token</param>
+    /// <returns>Tuple of (value, errorMessage) - value is null if resolution failed</returns>
+    private async Task<(CorDebugValue? Value, string? ErrorMessage)> ResolveExpressionToValueAsync(
+        string expression,
+        int? threadId,
+        int frameIndex,
+        CorDebugThread? thread,
+        CancellationToken cancellationToken = default)
+    {
+        // Get the IL frame for the specified thread/frame
+        var ilFrame = GetILFrame(threadId, frameIndex);
+        if (ilFrame == null) return (null, "Could not get IL frame");
+
+        // Try to resolve as a local variable or argument
+        var parts = expression.Split('.');
+        CorDebugValue? currentValue = null;
+        var resolvedPath = new List<string>();
+
+        // Get the root value
+        if (parts[0] == "this")
+        {
+            currentValue = TryGetThisForEval(ilFrame);
+            resolvedPath.Add("this");
+        }
+        else
+        {
+            currentValue = TryGetLocalOrArgument(parts[0], ilFrame);
+            resolvedPath.Add(parts[0]);
+        }
+
+        if (currentValue == null)
+        {
+            return (null, $"Could not resolve '{parts[0]}'");
+        }
+
+        // Navigate the path if there are more parts
+        for (int i = 1; i < parts.Length; i++)
+        {
+            var memberName = parts[i];
+
+            // Use TryGetMemberValueAsync which handles fields, backing fields, and property getters
+            var memberValue = await TryGetMemberValueAsync(
+                currentValue,
+                memberName,
+                thread,
+                timeoutMs: 5000,
+                cancellationToken);
+
+            if (memberValue == null)
+            {
+                var typeName = GetTypeName(currentValue);
+                var currentPath = string.Join(".", resolvedPath);
+                return (null, $"Member '{memberName}' not found on type '{typeName}' (at '{currentPath}')");
+            }
+
+            // Check for null intermediate value
+            if (memberValue is CorDebugReferenceValue refValue && refValue.IsNull && i < parts.Length - 1)
+            {
+                var currentPath = string.Join(".", resolvedPath) + "." + memberName;
+                var nextMember = parts[i + 1];
+                return (null, $"Cannot access '{nextMember}': '{currentPath}' is null");
+            }
+
+            resolvedPath.Add(memberName);
+            currentValue = memberValue;
+        }
+
+        return (currentValue, null);
+    }
+
+    /// <summary>
+    /// Synchronous version of expression resolution using field-only access.
+    /// This is a backwards-compatible fallback for methods that don't need property getter support.
     /// </summary>
     private CorDebugValue? ResolveExpressionToValue(string expression, int? threadId, int frameIndex)
     {
@@ -3093,11 +3334,20 @@ public sealed class ProcessDebugger : IProcessDebugger, IDisposable
 
         if (currentValue == null) return null;
 
-        // Navigate the path if there are more parts
+        // Navigate the path if there are more parts (field-only access)
         for (int i = 1; i < parts.Length; i++)
         {
             var memberName = parts[i];
+
+            // Try field first
             var fieldValue = TryGetFieldValue(currentValue, memberName);
+            if (fieldValue == null)
+            {
+                // Try backing field for auto-properties
+                var backingFieldName = $"<{memberName}>k__BackingField";
+                fieldValue = TryGetFieldValue(currentValue, backingFieldName);
+            }
+
             if (fieldValue == null) return null;
             currentValue = fieldValue;
         }
