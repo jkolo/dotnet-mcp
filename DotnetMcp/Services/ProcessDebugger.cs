@@ -273,6 +273,10 @@ public sealed class ProcessDebugger : IProcessDebugger, IDisposable
 
         try
         {
+            // Mark as launched before registering callback so ShouldAutoContinue()
+            // correctly suppresses Continue calls when stopAtEntry is true
+            _isLaunched = true;
+
             // Step 2: Register for runtime startup callback
             _startupCallbackDelegate = OnRuntimeStartup;
             _unregisterToken = _dbgShim.RegisterForRuntimeStartup(
@@ -304,8 +308,6 @@ public sealed class ProcessDebugger : IProcessDebugger, IDisposable
                 throw new OperationCanceledException(
                     $"Launch timed out after {effectiveTimeout.TotalSeconds}s waiting for CLR startup");
             }
-
-            _isLaunched = true;
 
             var processName = Path.GetFileNameWithoutExtension(program);
             var runtimeVersion = GetRuntimeVersion() ?? ".NET";
@@ -786,6 +788,7 @@ public sealed class ProcessDebugger : IProcessDebugger, IDisposable
                 }
 
                 _logger.LogDebug("Continuing execution...");
+                _stopAtEntry = false; // Allow callbacks to auto-continue from now on
                 _process.Continue(false);
                 UpdateState(SessionState.Running);
                 _logger.LogInformation("Execution resumed");
@@ -1971,6 +1974,13 @@ public sealed class ProcessDebugger : IProcessDebugger, IDisposable
         }
     }
 
+    /// <summary>
+    /// Returns false when the process was launched with stopAtEntry and hasn't been
+    /// explicitly continued yet — callbacks must NOT call Continue in that case.
+    /// </summary>
+    private bool ShouldAutoContinue()
+        => !(_isLaunched && _stopAtEntry);
+
     private CorDebugManagedCallback CreateManagedCallback()
     {
         var callback = new CorDebugManagedCallback();
@@ -1991,13 +2001,10 @@ public sealed class ProcessDebugger : IProcessDebugger, IDisposable
                 _process ??= e.Process;
             }
 
-            if (_isLaunched && _stopAtEntry)
-            {
+            if (ShouldAutoContinue())
+                e.Controller.Continue(false);
+            else
                 _logger.LogDebug("Launched with stopAtEntry - process will remain paused");
-                return;
-            }
-
-            e.Controller.Continue(false);
         };
 
         // CRITICAL: Must call Attach on new AppDomains
@@ -2005,14 +2012,16 @@ public sealed class ProcessDebugger : IProcessDebugger, IDisposable
         {
             _logger.LogDebug("AppDomain created: {Name}", e.AppDomain.Name);
             e.AppDomain.Attach();
-            e.Controller.Continue(false);
+            if (ShouldAutoContinue())
+                e.Controller.Continue(false);
         };
 
         // Handle AppDomain exit
         callback.OnExitAppDomain += (sender, e) =>
         {
             _logger.LogDebug("AppDomain exited");
-            e.Controller.Continue(false);
+            if (ShouldAutoContinue())
+                e.Controller.Continue(false);
         };
 
         // Handle breakpoint events
@@ -2029,7 +2038,7 @@ public sealed class ProcessDebugger : IProcessDebugger, IDisposable
             }
 
             // Notify listeners about the breakpoint hit with full location info
-            BreakpointHit?.Invoke(this, new BreakpointHitEventArgs
+            var args = new BreakpointHitEventArgs
             {
                 ThreadId = threadId,
                 Location = location,
@@ -2037,9 +2046,20 @@ public sealed class ProcessDebugger : IProcessDebugger, IDisposable
                 MethodToken = locationInfo?.MethodToken,
                 ILOffset = locationInfo?.ILOffset,
                 ModulePath = locationInfo?.ModulePath
-            });
+            };
+            BreakpointHit?.Invoke(this, args);
 
-            // Don't call Continue - let the session manager decide
+            // If a listener (e.g. BreakpointManager) determined condition is false,
+            // auto-continue instead of staying paused
+            if (args.ShouldContinue)
+            {
+                lock (_lock)
+                {
+                    UpdateState(SessionState.Running);
+                }
+                e.Controller.Continue(false);
+            }
+            // Otherwise stay paused - let the session manager decide
         };
 
         // Handle exception events (ManagedCallback1 - legacy, continue execution)
@@ -2047,7 +2067,8 @@ public sealed class ProcessDebugger : IProcessDebugger, IDisposable
         {
             // ManagedCallback1 OnException is called for first-chance exceptions
             // We use OnException2 for detailed handling, so just continue here
-            e.Controller.Continue(false);
+            if (ShouldAutoContinue())
+                e.Controller.Continue(false);
         };
 
         // Handle exception events with first-chance/second-chance differentiation (ManagedCallback2)
@@ -2095,7 +2116,8 @@ public sealed class ProcessDebugger : IProcessDebugger, IDisposable
                 // For first-chance exceptions, let the BreakpointManager decide
                 // based on registered exception breakpoints
                 // If no exception breakpoint handlers stop it, continue
-                e.Controller.Continue(false);
+                if (ShouldAutoContinue())
+                    e.Controller.Continue(false);
             }
         };
 
@@ -2153,7 +2175,8 @@ public sealed class ProcessDebugger : IProcessDebugger, IDisposable
             }
 
             // Continue after module load
-            e.Controller.Continue(false);
+            if (ShouldAutoContinue())
+                e.Controller.Continue(false);
         };
 
         // Handle module unloads (for bound breakpoint invalidation)
@@ -2177,25 +2200,29 @@ public sealed class ProcessDebugger : IProcessDebugger, IDisposable
                 _logger.LogWarning(ex, "Error processing module unload event");
             }
 
-            e.Controller.Continue(false);
+            if (ShouldAutoContinue())
+                e.Controller.Continue(false);
         };
 
         // Handle assembly loads
         callback.OnLoadAssembly += (sender, e) =>
         {
-            e.Controller.Continue(false);
+            if (ShouldAutoContinue())
+                e.Controller.Continue(false);
         };
 
         // Handle thread creation
         callback.OnCreateThread += (sender, e) =>
         {
-            e.Controller.Continue(false);
+            if (ShouldAutoContinue())
+                e.Controller.Continue(false);
         };
 
         // Handle thread exit
         callback.OnExitThread += (sender, e) =>
         {
-            e.Controller.Continue(false);
+            if (ShouldAutoContinue())
+                e.Controller.Continue(false);
         };
 
         // Handle step complete
@@ -2261,32 +2288,37 @@ public sealed class ProcessDebugger : IProcessDebugger, IDisposable
         // Handle assembly unload
         callback.OnUnloadAssembly += (sender, e) =>
         {
-            e.Controller.Continue(false);
+            if (ShouldAutoContinue())
+                e.Controller.Continue(false);
         };
 
         // Handle log messages
         callback.OnLogMessage += (sender, e) =>
         {
             _logger.LogDebug("Target log: [{Level}] {Message}", e.LogSwitchName, e.Message);
-            e.Controller.Continue(false);
+            if (ShouldAutoContinue())
+                e.Controller.Continue(false);
         };
 
         // Handle log switch changes
         callback.OnLogSwitch += (sender, e) =>
         {
-            e.Controller.Continue(false);
+            if (ShouldAutoContinue())
+                e.Controller.Continue(false);
         };
 
         // Handle name changes (thread/process renamed)
         callback.OnNameChange += (sender, e) =>
         {
-            e.Controller.Continue(false);
+            if (ShouldAutoContinue())
+                e.Controller.Continue(false);
         };
 
         // Handle symbol updates
         callback.OnUpdateModuleSymbols += (sender, e) =>
         {
-            e.Controller.Continue(false);
+            if (ShouldAutoContinue())
+                e.Controller.Continue(false);
         };
 
         // Handle debugger errors
@@ -2294,7 +2326,8 @@ public sealed class ProcessDebugger : IProcessDebugger, IDisposable
         {
             _logger.LogError("Debugger error: HRESULT=0x{ErrorHR:X8}, ErrorCode={ErrorCode}",
                 (uint)e.ErrorHR, e.ErrorCode);
-            e.Controller.Continue(false);
+            if (ShouldAutoContinue())
+                e.Controller.Continue(false);
         };
 
         // Handle eval completion (T064)
@@ -2320,7 +2353,7 @@ public sealed class ProcessDebugger : IProcessDebugger, IDisposable
             }
             // If this was a controlled eval, don't Continue - we want to stay paused
             // The caller will handle resumption if needed
-            if (!wasControlledEval)
+            if (!wasControlledEval && ShouldAutoContinue())
             {
                 e.Controller.Continue(false);
             }
@@ -2353,7 +2386,7 @@ public sealed class ProcessDebugger : IProcessDebugger, IDisposable
                 }
             }
             // If this was a controlled eval, don't Continue - we want to stay paused
-            if (!wasControlledEval)
+            if (!wasControlledEval && ShouldAutoContinue())
             {
                 e.Controller.Continue(false);
             }
@@ -2362,14 +2395,16 @@ public sealed class ProcessDebugger : IProcessDebugger, IDisposable
         // Handle edit and continue remap
         callback.OnEditAndContinueRemap += (sender, e) =>
         {
-            e.Controller.Continue(false);
+            if (ShouldAutoContinue())
+                e.Controller.Continue(false);
         };
 
         // Handle break on exception
         callback.OnBreakpointSetError += (sender, e) =>
         {
             _logger.LogWarning("Breakpoint set error on thread {ThreadId}", e.Thread.Id);
-            e.Controller.Continue(false);
+            if (ShouldAutoContinue())
+                e.Controller.Continue(false);
         };
 
         return callback;

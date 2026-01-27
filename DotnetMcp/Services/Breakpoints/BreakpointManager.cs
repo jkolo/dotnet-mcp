@@ -95,7 +95,12 @@ public sealed class BreakpointManager : IBreakpointManager
             HitCount: breakpoint.HitCount + 1,
             ExceptionInfo: null);
 
-        OnBreakpointHit(hit);
+        var shouldPause = OnBreakpointHit(hit);
+        if (!shouldPause)
+        {
+            // Condition was false — signal that the callback should auto-continue
+            e.ShouldContinue = true;
+        }
     }
 
     /// <inheritdoc />

@@ -408,6 +408,13 @@ public sealed class BreakpointHitEventArgs : EventArgs
 
     /// <summary>Path to the module (assembly) containing the breakpoint.</summary>
     public string? ModulePath { get; init; }
+
+    /// <summary>
+    /// Set to true by event handlers (e.g. BreakpointManager) to signal that
+    /// the debugger callback should auto-continue instead of staying paused.
+    /// Used when a conditional breakpoint's condition evaluates to false.
+    /// </summary>
+    public bool ShouldContinue { get; set; }
 }
 
 /// <summary>

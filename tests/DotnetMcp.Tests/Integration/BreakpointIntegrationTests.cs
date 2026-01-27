@@ -332,7 +332,7 @@ public class BreakpointIntegrationTests : IAsyncLifetime
     /// E2E test: Conditional breakpoint only breaks when condition is met.
     /// Note: Currently conditions are validated but not evaluated at runtime.
     /// </summary>
-    [Fact(Skip = "Conditional breakpoint evaluation not yet implemented")]
+    [Fact]
     [Trait("Category", "E2E")]
     public async Task ConditionalBreakpoint_OnlyHitsWhenConditionMet()
     {
