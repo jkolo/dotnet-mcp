@@ -65,9 +65,9 @@
 
 > **NOTE: Write tests FIRST, ensure they FAIL before implementation**
 
-- [ ] T017 [P] [US1] Contract test for object_inspect schema in tests/DotnetMcp.Tests/Contract/ObjectInspectContractTests.cs
-- [ ] T018 [P] [US1] Unit test for InspectObject in tests/DotnetMcp.Tests/Unit/ProcessDebuggerTests.cs
-- [ ] T019 [US1] Integration test for object inspection workflow in tests/DotnetMcp.Tests/Integration/ObjectInspectionTests.cs
+- [x] T017 [P] [US1] Contract test for object_inspect schema in tests/DotnetMcp.Tests/Contract/ObjectInspectContractTests.cs
+- [x] T018 [P] [US1] Unit test for InspectObject in tests/DotnetMcp.Tests/Unit/ProcessDebuggerTests.cs
+- [x] T019 [US1] Integration test for object inspection workflow in tests/DotnetMcp.Tests/Integration/ObjectInspectionTests.cs
 
 ### Implementation for User Story 1
 
@@ -95,9 +95,9 @@
 
 ### Tests for User Story 2
 
-- [ ] T031 [P] [US2] Contract test for memory_read schema in tests/DotnetMcp.Tests/Contract/MemoryReadContractTests.cs
-- [ ] T032 [P] [US2] Unit test for ReadMemory in tests/DotnetMcp.Tests/Unit/ProcessDebuggerTests.cs
-- [ ] T033 [US2] Integration test for memory read workflow in tests/DotnetMcp.Tests/Integration/MemoryReadTests.cs
+- [x] T031 [P] [US2] Contract test for memory_read schema in tests/DotnetMcp.Tests/Contract/MemoryReadContractTests.cs
+- [x] T032 [P] [US2] Unit test for ReadMemory in tests/DotnetMcp.Tests/Unit/ProcessDebuggerTests.cs
+- [x] T033 [US2] Integration test for memory read workflow in tests/DotnetMcp.Tests/Integration/MemoryReadTests.cs
 
 ### Implementation for User Story 2
 
@@ -123,9 +123,9 @@
 
 ### Tests for User Story 3
 
-- [ ] T043 [P] [US3] Contract test for references_get schema in tests/DotnetMcp.Tests/Contract/ReferencesGetContractTests.cs
-- [ ] T044 [P] [US3] Unit test for GetOutboundReferences in tests/DotnetMcp.Tests/Unit/ProcessDebuggerTests.cs
-- [ ] T045 [US3] Integration test for reference analysis in tests/DotnetMcp.Tests/Integration/ReferenceAnalysisTests.cs
+- [x] T043 [P] [US3] Contract test for references_get schema in tests/DotnetMcp.Tests/Contract/ReferencesGetContractTests.cs
+- [x] T044 [P] [US3] Unit test for GetOutboundReferences in tests/DotnetMcp.Tests/Unit/ProcessDebuggerTests.cs
+- [x] T045 [US3] Integration test for reference analysis in tests/DotnetMcp.Tests/Integration/ReferenceAnalysisTests.cs
 
 ### Implementation for User Story 3
 
@@ -149,9 +149,9 @@
 
 ### Tests for User Story 4
 
-- [ ] T053 [P] [US4] Contract test for layout_get schema in tests/DotnetMcp.Tests/Contract/LayoutGetContractTests.cs
-- [ ] T054 [P] [US4] Unit test for GetTypeLayout in tests/DotnetMcp.Tests/Unit/ProcessDebuggerTests.cs
-- [ ] T055 [US4] Integration test for layout inspection in tests/DotnetMcp.Tests/Integration/LayoutInspectionTests.cs
+- [x] T053 [P] [US4] Contract test for layout_get schema in tests/DotnetMcp.Tests/Contract/LayoutGetContractTests.cs
+- [x] T054 [P] [US4] Unit test for GetTypeLayout in tests/DotnetMcp.Tests/Unit/ProcessDebuggerTests.cs
+- [x] T055 [US4] Integration test for layout inspection in tests/DotnetMcp.Tests/Integration/LayoutInspectionTests.cs
 
 ### Implementation for User Story 4
 

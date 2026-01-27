@@ -614,4 +614,127 @@ public class ProcessDebuggerTests
         await act.Should().ThrowAsync<InvalidOperationException>()
             .WithMessage("*not attached*");
     }
+
+    // ===== T018: InspectObjectAsync Tests =====
+
+    [Fact]
+    public async Task InspectObjectAsync_WhenNotAttached_ThrowsInvalidOperationException()
+    {
+        // Arrange - fresh instance (not attached)
+
+        // Act
+        var act = async () => await _sut.InspectObjectAsync("this");
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*not attached*");
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(5)]
+    [InlineData(10)]
+    public async Task InspectObjectAsync_WithValidDepth_ThrowsNotAttached(int depth)
+    {
+        // Act
+        var act = async () => await _sut.InspectObjectAsync("this", depth);
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*not attached*");
+    }
+
+    [Fact]
+    public async Task InspectObjectAsync_WithFrameIndex_ThrowsNotAttached()
+    {
+        // Act
+        var act = async () => await _sut.InspectObjectAsync("this", frameIndex: 3);
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*not attached*");
+    }
+
+    // ===== T032: ReadMemoryAsync Tests =====
+
+    [Fact]
+    public async Task ReadMemoryAsync_WhenNotAttached_ThrowsInvalidOperationException()
+    {
+        // Arrange - fresh instance (not attached)
+
+        // Act
+        var act = async () => await _sut.ReadMemoryAsync("0x1000");
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*not attached*");
+    }
+
+    [Theory]
+    [InlineData(1)]
+    [InlineData(256)]
+    [InlineData(65536)]
+    public async Task ReadMemoryAsync_WithVariousSize_ThrowsNotAttached(int size)
+    {
+        // Act
+        var act = async () => await _sut.ReadMemoryAsync("0x1000", size);
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*not attached*");
+    }
+
+    // ===== T044: GetOutboundReferencesAsync Tests =====
+
+    [Fact]
+    public async Task GetOutboundReferencesAsync_WhenNotAttached_ThrowsInvalidOperationException()
+    {
+        // Arrange - fresh instance (not attached)
+
+        // Act
+        var act = async () => await _sut.GetOutboundReferencesAsync("this");
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*not attached*");
+    }
+
+    [Fact]
+    public async Task GetOutboundReferencesAsync_WithParams_ThrowsNotAttached()
+    {
+        // Act
+        var act = async () => await _sut.GetOutboundReferencesAsync(
+            "this", includeArrays: false, maxResults: 25, frameIndex: 2);
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*not attached*");
+    }
+
+    // ===== T054: GetTypeLayoutAsync Tests =====
+
+    [Fact]
+    public async Task GetTypeLayoutAsync_WhenNotAttached_ThrowsInvalidOperationException()
+    {
+        // Arrange - fresh instance (not attached)
+
+        // Act
+        var act = async () => await _sut.GetTypeLayoutAsync("System.String");
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*not attached*");
+    }
+
+    [Fact]
+    public async Task GetTypeLayoutAsync_WithParams_ThrowsNotAttached()
+    {
+        // Act
+        var act = async () => await _sut.GetTypeLayoutAsync(
+            "MyApp.Models.Customer", includeInherited: false, includePadding: false);
+
+        // Assert
+        await act.Should().ThrowAsync<InvalidOperationException>()
+            .WithMessage("*not attached*");
+    }
 }

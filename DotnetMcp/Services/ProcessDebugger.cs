@@ -3877,15 +3877,19 @@ public sealed class ProcessDebugger : IProcessDebugger, IDisposable
                 throw new ArgumentException("Size must be positive");
             }
 
-            // Parse address
+            // Parse address (supports "0x..." hex or decimal)
             ulong addr;
-            if (address.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+            try
             {
-                addr = ulong.Parse(address.Substring(2), NumberStyles.HexNumber);
+                var trimmed = address.Trim();
+                if (trimmed.StartsWith("0x", StringComparison.OrdinalIgnoreCase))
+                    addr = Convert.ToUInt64(trimmed[2..], 16);
+                else
+                    addr = Convert.ToUInt64(trimmed, 10);
             }
-            else
+            catch (Exception ex) when (ex is FormatException or OverflowException)
             {
-                addr = ulong.Parse(address);
+                throw new ArgumentException($"Invalid memory address format: '{address}'", ex);
             }
 
             _logger.LogDebug("Reading {Size} bytes from address {Address}", size, address);
