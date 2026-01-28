@@ -7,4 +7,14 @@
     <Nullable>enable</Nullable>
   </PropertyGroup>
 
+  <ItemGroup>
+    <!-- Exclude lib sources from TestTargetApp compilation -->
+    <Compile Remove="Libs/**/*.cs" />
+  </ItemGroup>
+
+  <!-- Only reference leaf nodes; transitive deps pull in the rest -->
+  <ItemGroup>
+    <ProjectReference Include="Libs/TestLib10/TestLib10.csproj" />
+  </ItemGroup>
+
 </Project>

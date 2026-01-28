@@ -1,0 +1,11 @@
+<Project Sdk="Microsoft.NET.Sdk">
+  <PropertyGroup>
+    <TargetFramework>net10.0</TargetFramework>
+    <ImplicitUsings>enable</ImplicitUsings>
+    <Nullable>enable</Nullable>
+  </PropertyGroup>
+  <ItemGroup>
+    <ProjectReference Include="../TestLib2/TestLib2.csproj" />
+    <ProjectReference Include="../TestLib3/TestLib3.csproj" />
+  </ItemGroup>
+</Project>

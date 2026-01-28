@@ -733,6 +733,11 @@ public sealed class ProcessDebugger : IProcessDebugger, IDisposable
                 return Array.Empty<LoadedModuleInfo>();
             }
 
+            // ICorDebug requires the process to be stopped for reliable enumeration.
+            bool wasRunning = _currentState == SessionState.Running;
+            if (wasRunning)
+                _process.Stop(0);
+
             var modules = new List<LoadedModuleInfo>();
 
             try
@@ -764,6 +769,11 @@ public sealed class ProcessDebugger : IProcessDebugger, IDisposable
             catch (Exception ex)
             {
                 _logger.LogWarning(ex, "Error enumerating loaded modules");
+            }
+            finally
+            {
+                if (wasRunning)
+                    _process.Continue(false);
             }
 
             return modules;
@@ -4464,6 +4474,12 @@ public sealed class ProcessDebugger : IProcessDebugger, IDisposable
                 _logger.LogDebug("Getting modules (includeSystem={IncludeSystem}, nameFilter={NameFilter})",
                     includeSystem, nameFilter);
 
+                // ICorDebug requires the process to be stopped for reliable
+                // enumeration of AppDomains/Assemblies/Modules.
+                bool wasRunning = _currentState == SessionState.Running;
+                if (wasRunning)
+                    _process.Stop(0);
+
                 var modules = new List<Models.Modules.ModuleInfo>();
                 var moduleIdCounter = 0;
 
@@ -4508,6 +4524,11 @@ public sealed class ProcessDebugger : IProcessDebugger, IDisposable
                 {
                     _logger.LogWarning(ex, "Error enumerating modules");
                     throw new InvalidOperationException($"Failed to enumerate modules: {ex.Message}", ex);
+                }
+                finally
+                {
+                    if (wasRunning)
+                        _process.Continue(false);
                 }
 
                 _logger.LogInformation("Retrieved {Count} modules", modules.Count);

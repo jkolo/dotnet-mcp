@@ -1,7 +1,11 @@
 // Test target for debugger attach/launch and breakpoint tests
 using TestTargetApp;
 
-Console.WriteLine($"TestTargetApp started. PID: {Environment.ProcessId}");
+// Force-load all test libraries via transitive dependency chain
+// TestLib10 -> TestLib9 -> TestLib5,7,8 -> TestLib2,3,4,6 -> TestLib1
+var topLib = TestLib10.Util10.GetName();
+
+Console.WriteLine($"TestTargetApp started. PID: {Environment.ProcessId}. Top lib: {topLib}");
 Console.WriteLine("READY");
 Console.Out.Flush();
 
