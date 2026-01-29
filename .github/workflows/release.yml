@@ -51,6 +51,17 @@ jobs:
           files: ./nupkg/*.nupkg
           generate_release_notes: true
 
+      - name: Notify Matrix on success
+        if: success() && env.HAS_MATRIX == 'true'
+        env:
+          HAS_MATRIX: ${{ secrets.MATRIX_HOMESERVER != '' }}
+        uses: s3krit/matrix-message-action@v0.0.3
+        with:
+          room_id: ${{ secrets.MATRIX_ROOM_ID }}
+          access_token: ${{ secrets.MATRIX_TOKEN }}
+          server: ${{ secrets.MATRIX_HOMESERVER }}
+          message: "Released ${{ github.ref_name }} ✅\nRelease: https://github.com/${{ github.repository }}/releases/tag/${{ github.ref_name }}\nNuGet: https://www.nuget.org/packages/debug-mcp/${{ steps.version.outputs.VERSION }}"
+
       - name: Notify Matrix on failure
         if: failure() && env.HAS_MATRIX == 'true'
         env:
@@ -60,4 +71,4 @@ jobs:
           room_id: ${{ secrets.MATRIX_ROOM_ID }}
           access_token: ${{ secrets.MATRIX_TOKEN }}
           server: ${{ secrets.MATRIX_HOMESERVER }}
-          message: "Release workflow failed for ${{ github.repository }} tag ${{ github.ref_name }}"
+          message: "Release ${{ github.ref_name }} failed ❌\nLogs: https://github.com/${{ github.repository }}/actions/runs/${{ github.run_id }}"
