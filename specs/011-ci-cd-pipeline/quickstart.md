@@ -22,14 +22,17 @@ git tag v1.1.0-beta.1
 git push origin v1.1.0-beta.1
 ```
 
-## Install After Release
+## Run After Release
 
 ```bash
-# From NuGet.org
-dotnet tool install -g NetInspect.Mcp
+# No installation needed (.NET 10+)
+dnx netinspect-mcp
 
-# Specific version
-dotnet tool install -g NetInspect.Mcp --version 1.0.0
+# Or one-shot execution
+dotnet tool exec netinspect-mcp
+
+# Or install globally
+dotnet tool install -g NetInspect.Mcp
 ```
 
 ## Required Secrets

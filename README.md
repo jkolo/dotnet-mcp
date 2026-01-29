@@ -20,20 +20,25 @@ Unlike similar tools that use external debuggers via DAP protocol, NetInspect.Mc
 
 ## Quick Start
 
-### Installation
+### Run
 
 ```bash
-# As .NET global tool
+# No installation needed (.NET 10+)
+dnx netinspect-mcp
+
+# Or one-shot execution
+dotnet tool exec netinspect-mcp
+```
+
+### Install (optional)
+
+```bash
+# Global tool
 dotnet tool install -g NetInspect.Mcp
 
-# As local tool (per-project)
+# Local tool (per-project)
 dotnet new tool-manifest   # if not already present
 dotnet tool install NetInspect.Mcp
-
-# Or run from source
-git clone https://github.com/jkolo/netinspect-mcp
-cd netinspect-mcp
-dotnet run --project NetInspect.Mcp/NetInspect.Mcp.csproj
 ```
 
 ### Requirements
@@ -49,7 +54,8 @@ Add to your `claude_desktop_config.json`:
 {
   "mcpServers": {
     "dotnet-debugger": {
-      "command": "netinspect-mcp"
+      "command": "dnx",
+      "args": ["netinspect-mcp"]
     }
   }
 }
