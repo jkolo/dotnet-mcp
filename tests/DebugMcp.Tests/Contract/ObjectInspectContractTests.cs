@@ -1,7 +1,7 @@
-using NetInspect.Mcp.Models;
+using DebugMcp.Models;
 using FluentAssertions;
 
-namespace NetInspect.Mcp.Tests.Contract;
+namespace DebugMcp.Tests.Contract;
 
 /// <summary>
 /// Contract tests validating the object_inspect tool schema compliance.

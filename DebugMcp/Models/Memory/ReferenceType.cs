@@ -1,4 +1,4 @@
-namespace NetInspect.Mcp.Models.Memory;
+namespace DebugMcp.Models.Memory;
 
 /// <summary>
 /// Type of object reference relationship.

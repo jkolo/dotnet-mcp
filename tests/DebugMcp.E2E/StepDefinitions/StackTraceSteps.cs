@@ -1,6 +1,6 @@
-using NetInspect.Mcp.E2E.Support;
+using DebugMcp.E2E.Support;
 
-namespace NetInspect.Mcp.E2E.StepDefinitions;
+namespace DebugMcp.E2E.StepDefinitions;
 
 [Binding]
 public sealed class StackTraceSteps

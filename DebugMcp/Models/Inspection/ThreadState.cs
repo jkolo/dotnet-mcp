@@ -1,4 +1,4 @@
-namespace NetInspect.Mcp.Models.Inspection;
+namespace DebugMcp.Models.Inspection;
 
 /// <summary>
 /// Current state of a managed thread.

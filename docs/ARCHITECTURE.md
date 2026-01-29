@@ -2,7 +2,7 @@
 
 ## Overview
 
-DotnetMcp is structured as a bridge between the MCP protocol (JSON-RPC over stdio) and the .NET debugging infrastructure (ICorDebug COM APIs).
+DebugMcp is structured as a bridge between the MCP protocol (JSON-RPC over stdio) and the .NET debugging infrastructure (ICorDebug COM APIs).
 
 ```
 ┌─────────────────────────────────────────────────────────────────────────────┐
@@ -13,7 +13,7 @@ DotnetMcp is structured as a bridge between the MCP protocol (JSON-RPC over stdi
                                        │ Transport: stdio
                                        ▼
 ┌─────────────────────────────────────────────────────────────────────────────┐
-│                              DotnetMcp Server                               │
+│                              DebugMcp Server                               │
 │  ┌─────────────────────────────────────────────────────────────────────┐   │
 │  │                         MCP Layer                                    │   │
 │  │  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐  ┌─────────┐ │   │
@@ -195,7 +195,7 @@ Creates and initializes ICorDebug instances:
 
 ## Threading Model
 
-DotnetMcp uses a single-threaded apartment (STA) for COM interop with ICorDebug:
+DebugMcp uses a single-threaded apartment (STA) for COM interop with ICorDebug:
 
 ```
 ┌────────────────────────────────────────────────────┐

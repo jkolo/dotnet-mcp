@@ -1,6 +1,6 @@
 using System.CommandLine;
-using NetInspect.Mcp.Services;
-using NetInspect.Mcp.Services.Breakpoints;
+using DebugMcp.Services;
+using DebugMcp.Services.Breakpoints;
 using Microsoft.Extensions.DependencyInjection;
 using Microsoft.Extensions.Hosting;
 using Microsoft.Extensions.Logging;

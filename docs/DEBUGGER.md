@@ -1,6 +1,6 @@
 # How .NET Debugging Works
 
-This document explains the .NET debugging infrastructure that DotnetMcp uses.
+This document explains the .NET debugging infrastructure that DebugMcp uses.
 
 ## Overview
 
@@ -15,7 +15,7 @@ This document explains the .NET debugging infrastructure that DotnetMcp uses.
 
 ```
 ┌─────────────────────────────────────────────────────────────────────┐
-│                     Debugger (DotnetMcp)                            │
+│                     Debugger (DebugMcp)                            │
 │  ┌──────────────────────────────────────────────────────────────┐  │
 │  │                    ClrDebug                                   │  │
 │  │            Managed wrappers for COM interfaces                │  │

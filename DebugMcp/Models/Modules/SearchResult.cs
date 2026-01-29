@@ -1,4 +1,4 @@
-namespace NetInspect.Mcp.Models.Modules;
+namespace DebugMcp.Models.Modules;
 
 /// <summary>
 /// Type of search to perform.

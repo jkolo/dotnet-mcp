@@ -1,9 +1,9 @@
-using NetInspect.Mcp.Services.Breakpoints;
+using DebugMcp.Services.Breakpoints;
 using FluentAssertions;
 using Microsoft.Extensions.Logging;
 using Moq;
 
-namespace NetInspect.Mcp.Tests.Unit;
+namespace DebugMcp.Tests.Unit;
 
 /// <summary>
 /// Unit tests for PdbSymbolReader source-to-IL mapping functionality.

@@ -1,6 +1,6 @@
 using Microsoft.Extensions.Logging;
 
-namespace NetInspect.Mcp.Infrastructure;
+namespace DebugMcp.Infrastructure;
 
 /// <summary>
 /// Logging categories and extension methods for structured logging.
@@ -8,9 +8,9 @@ namespace NetInspect.Mcp.Infrastructure;
 public static partial class Logging
 {
     // Category names
-    public const string DebugSession = "NetInspect.Mcp.DebugSession";
-    public const string ProcessDebugger = "NetInspect.Mcp.ProcessDebugger";
-    public const string Tools = "NetInspect.Mcp.Tools";
+    public const string DebugSession = "DebugMcp.DebugSession";
+    public const string ProcessDebugger = "DebugMcp.ProcessDebugger";
+    public const string Tools = "DebugMcp.Tools";
 
     // Session lifecycle events
     [LoggerMessage(

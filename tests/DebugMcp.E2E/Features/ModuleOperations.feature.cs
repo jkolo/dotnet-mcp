@@ -11,7 +11,7 @@
 #region Designer generated code
 #pragma warning disable
 using Reqnroll;
-namespace NetInspect.Mcp.E2E.Features
+namespace DebugMcp.E2E.Features
 {
     
     

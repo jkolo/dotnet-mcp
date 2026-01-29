@@ -1,13 +1,13 @@
 using System.ComponentModel;
 using System.Text.Json;
-using NetInspect.Mcp.Infrastructure;
-using NetInspect.Mcp.Models;
-using NetInspect.Mcp.Models.Inspection;
-using NetInspect.Mcp.Services;
+using DebugMcp.Infrastructure;
+using DebugMcp.Models;
+using DebugMcp.Models.Inspection;
+using DebugMcp.Services;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Server;
 
-namespace NetInspect.Mcp.Tools;
+namespace DebugMcp.Tools;
 
 /// <summary>
 /// MCP tool for evaluating expressions in the debuggee context.

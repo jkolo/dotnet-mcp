@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace NetInspect.Mcp.Models.Memory;
+namespace DebugMcp.Models.Memory;
 
 /// <summary>
 /// Padding between fields for alignment.

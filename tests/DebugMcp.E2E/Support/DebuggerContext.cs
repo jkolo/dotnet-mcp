@@ -1,15 +1,15 @@
-using NetInspect.Mcp.Models;
-using NetInspect.Mcp.Models.Breakpoints;
-using NetInspect.Mcp.Models.Inspection;
-using NetInspect.Mcp.Models.Memory;
-using NetInspect.Mcp.Models.Modules;
-using NetInspect.Mcp.Services;
-using NetInspect.Mcp.Services.Breakpoints;
-using NetInspect.Mcp.Tests.Helpers;
+using DebugMcp.Models;
+using DebugMcp.Models.Breakpoints;
+using DebugMcp.Models.Inspection;
+using DebugMcp.Models.Memory;
+using DebugMcp.Models.Modules;
+using DebugMcp.Services;
+using DebugMcp.Services.Breakpoints;
+using DebugMcp.Tests.Helpers;
 using Microsoft.Extensions.Logging;
 using Moq;
 
-namespace NetInspect.Mcp.E2E.Support;
+namespace DebugMcp.E2E.Support;
 
 /// <summary>
 /// Shared scenario-scoped context for Reqnroll E2E tests.

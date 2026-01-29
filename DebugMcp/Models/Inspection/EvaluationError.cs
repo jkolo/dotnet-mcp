@@ -1,4 +1,4 @@
-namespace NetInspect.Mcp.Models.Inspection;
+namespace DebugMcp.Models.Inspection;
 
 /// <summary>
 /// Error details for failed expression evaluation.

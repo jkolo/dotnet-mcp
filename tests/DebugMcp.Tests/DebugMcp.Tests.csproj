@@ -24,7 +24,7 @@
     </ItemGroup>
 
     <ItemGroup>
-        <ProjectReference Include="..\..\NetInspect.Mcp\NetInspect.Mcp.csproj" />
+        <ProjectReference Include="..\..\DebugMcp\DebugMcp.csproj" />
     </ItemGroup>
 
     <ItemGroup>

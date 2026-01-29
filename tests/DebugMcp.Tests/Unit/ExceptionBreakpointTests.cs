@@ -1,10 +1,10 @@
-using NetInspect.Mcp.Models.Breakpoints;
-using NetInspect.Mcp.Services.Breakpoints;
+using DebugMcp.Models.Breakpoints;
+using DebugMcp.Services.Breakpoints;
 using FluentAssertions;
 using Microsoft.Extensions.Logging;
 using Moq;
 
-namespace NetInspect.Mcp.Tests.Unit;
+namespace DebugMcp.Tests.Unit;
 
 /// <summary>
 /// Unit tests for exception breakpoint registration and management.

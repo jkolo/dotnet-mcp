@@ -1,4 +1,4 @@
-namespace NetInspect.Mcp.Models.Modules;
+namespace DebugMcp.Models.Modules;
 
 /// <summary>
 /// Aggregated result for type member inspection.

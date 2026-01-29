@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace NetInspect.Mcp.Models.Memory;
+namespace DebugMcp.Models.Memory;
 
 /// <summary>
 /// Memory layout information for a type.

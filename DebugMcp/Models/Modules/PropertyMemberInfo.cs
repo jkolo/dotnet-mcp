@@ -1,4 +1,4 @@
-namespace NetInspect.Mcp.Models.Modules;
+namespace DebugMcp.Models.Modules;
 
 /// <summary>
 /// Represents a property in a type.

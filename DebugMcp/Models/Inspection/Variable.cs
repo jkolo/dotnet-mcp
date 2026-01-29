@@ -1,4 +1,4 @@
-namespace NetInspect.Mcp.Models.Inspection;
+namespace DebugMcp.Models.Inspection;
 
 /// <summary>
 /// Represents a named value in scope during debugging.

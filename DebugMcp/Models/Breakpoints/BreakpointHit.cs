@@ -1,4 +1,4 @@
-namespace NetInspect.Mcp.Models.Breakpoints;
+namespace DebugMcp.Models.Breakpoints;
 
 /// <summary>
 /// Information about a triggered breakpoint event.

@@ -1,11 +1,11 @@
 using System.Diagnostics;
 
-namespace NetInspect.Mcp.Tests.Unit;
+namespace DebugMcp.Tests.Unit;
 
 public class CliArgumentTests
 {
     private static readonly string ProjectPath = Path.GetFullPath(
-        Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "NetInspect.Mcp", "NetInspect.Mcp.csproj"));
+        Path.Combine(AppContext.BaseDirectory, "..", "..", "..", "..", "..", "DebugMcp", "DebugMcp.csproj"));
 
     private static readonly string Configuration =
 #if DEBUG

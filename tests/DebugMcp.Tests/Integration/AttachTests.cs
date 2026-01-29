@@ -1,12 +1,12 @@
-using NetInspect.Mcp.Models;
-using NetInspect.Mcp.Services;
-using NetInspect.Mcp.Services.Breakpoints;
-using NetInspect.Mcp.Tests.Helpers;
+using DebugMcp.Models;
+using DebugMcp.Services;
+using DebugMcp.Services.Breakpoints;
+using DebugMcp.Tests.Helpers;
 using FluentAssertions;
 using Microsoft.Extensions.Logging;
 using Moq;
 
-namespace NetInspect.Mcp.Tests.Integration;
+namespace DebugMcp.Tests.Integration;
 
 /// <summary>
 /// Integration tests for the attach workflow.

@@ -10,8 +10,8 @@
 
 ```bash
 # Clone repository
-git clone https://github.com/yourname/DotnetMcp
-cd DotnetMcp
+git clone https://github.com/yourname/DebugMcp
+cd DebugMcp
 
 # Restore and build
 dotnet build
@@ -20,14 +20,14 @@ dotnet build
 dotnet test
 
 # Run locally
-dotnet run --project src/DotnetMcp
+dotnet run --project src/DebugMcp
 ```
 
 ## Project Structure
 
 ```
-DotnetMcp/
-├── DotnetMcp.slnx                 # Solution file
+DebugMcp/
+├── DebugMcp.slnx                 # Solution file
 ├── README.md
 ├── docs/
 │   ├── ARCHITECTURE.md
@@ -35,8 +35,8 @@ DotnetMcp/
 │   ├── MCP_TOOLS.md
 │   └── DEVELOPMENT.md
 ├── src/
-│   └── DotnetMcp/
-│       ├── DotnetMcp.csproj       # Main project
+│   └── DebugMcp/
+│       ├── DebugMcp.csproj       # Main project
 │       ├── Program.cs             # Entry point
 │       ├── Tools/                 # MCP tool implementations
 │       │   ├── SessionTools.cs
@@ -53,8 +53,8 @@ DotnetMcp/
 │           ├── DbgShimLoader.cs
 │           └── CorDebugFactory.cs
 └── tests/
-    └── DotnetMcp.Tests/
-        ├── DotnetMcp.Tests.csproj
+    └── DebugMcp.Tests/
+        ├── DebugMcp.Tests.csproj
         ├── Tools/                 # Tool unit tests
         ├── Debugger/              # Debugger tests
         └── Integration/           # Integration tests
@@ -86,23 +86,23 @@ dotnet test --filter Category=Integration
 # Install MCP Inspector
 npm install -g @modelcontextprotocol/inspector
 
-# Run DotnetMcp with inspector
-mcp-inspector dotnet run --project src/DotnetMcp
+# Run DebugMcp with inspector
+mcp-inspector dotnet run --project src/DebugMcp
 ```
 
-## Debugging DotnetMcp Itself
+## Debugging DebugMcp Itself
 
 ### VS Code
 
 1. Open in VS Code
-2. Select "DotnetMcp (Debug)" launch configuration
+2. Select "DebugMcp (Debug)" launch configuration
 3. Set breakpoints in Tool or Debugger code
 4. F5 to start debugging
 
 ### Rider
 
 1. Open solution in Rider
-2. Select DotnetMcp run configuration
+2. Select DebugMcp run configuration
 3. Set breakpoints
 4. Debug (Shift+F9)
 
@@ -115,7 +115,7 @@ mcp-inspector dotnet run --project src/DotnetMcp
      "mcpServers": {
        "dotnet-debugger-dev": {
          "command": "dotnet",
-         "args": ["run", "--project", "/path/to/DotnetMcp/src/DotnetMcp"]
+         "args": ["run", "--project", "/path/to/DebugMcp/src/DebugMcp"]
        }
      }
    }
@@ -313,7 +313,7 @@ Follow [SemVer](https://semver.org/):
 ### Release Steps
 
 ```bash
-# Update version in DotnetMcp.csproj
+# Update version in DebugMcp.csproj
 # <Version>1.2.3</Version>
 
 # Update CHANGELOG.md

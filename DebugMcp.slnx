@@ -1,9 +1,9 @@
 <Solution>
   <Folder Name="/src/">
-    <Project Path="NetInspect.Mcp/NetInspect.Mcp.csproj" />
+    <Project Path="DebugMcp/DebugMcp.csproj" />
   </Folder>
   <Folder Name="/tests/">
-    <Project Path="tests/NetInspect.Mcp.E2E/NetInspect.Mcp.E2E.csproj" />
-    <Project Path="tests/NetInspect.Mcp.Tests/NetInspect.Mcp.Tests.csproj" />
+    <Project Path="tests/DebugMcp.E2E/DebugMcp.E2E.csproj" />
+    <Project Path="tests/DebugMcp.Tests/DebugMcp.Tests.csproj" />
   </Folder>
 </Solution>

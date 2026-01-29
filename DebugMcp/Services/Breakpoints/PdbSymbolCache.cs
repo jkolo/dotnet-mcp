@@ -2,7 +2,7 @@ using System.Collections.Concurrent;
 using System.Reflection.Metadata;
 using Microsoft.Extensions.Logging;
 
-namespace NetInspect.Mcp.Services.Breakpoints;
+namespace DebugMcp.Services.Breakpoints;
 
 /// <summary>
 /// Caches MetadataReaderProvider instances per assembly to avoid repeated file I/O.

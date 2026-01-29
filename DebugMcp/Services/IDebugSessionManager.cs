@@ -1,7 +1,7 @@
-using NetInspect.Mcp.Models;
-using NetInspect.Mcp.Models.Memory;
+using DebugMcp.Models;
+using DebugMcp.Models.Memory;
 
-namespace NetInspect.Mcp.Services;
+namespace DebugMcp.Services;
 
 /// <summary>
 /// Manages the lifecycle of debug sessions.

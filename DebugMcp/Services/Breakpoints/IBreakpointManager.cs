@@ -1,6 +1,6 @@
-using NetInspect.Mcp.Models.Breakpoints;
+using DebugMcp.Models.Breakpoints;
 
-namespace NetInspect.Mcp.Services.Breakpoints;
+namespace DebugMcp.Services.Breakpoints;
 
 /// <summary>
 /// Manages breakpoint lifecycle and operations.

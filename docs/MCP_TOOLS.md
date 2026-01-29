@@ -1,6 +1,6 @@
 # MCP Tools Reference
 
-Complete reference for all debugging tools exposed by DotnetMcp.
+Complete reference for all debugging tools exposed by DebugMcp.
 
 ## Session Management
 

@@ -2,7 +2,7 @@
   "mcpServers": {
     "dotnet-debugger": {
       "command": "dotnet",
-      "args": ["NetInspect.Mcp/bin/Release/net10.0/NetInspect.Mcp.dll"]
+      "args": ["DebugMcp/bin/Release/net10.0/DebugMcp.dll"]
     }
   }
 }

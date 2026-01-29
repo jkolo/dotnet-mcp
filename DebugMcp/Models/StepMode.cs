@@ -1,4 +1,4 @@
-namespace NetInspect.Mcp.Models;
+namespace DebugMcp.Models;
 
 /// <summary>
 /// Mode for stepping through code during debugging.

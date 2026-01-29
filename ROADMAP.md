@@ -1,4 +1,4 @@
-# DotnetMcp Roadmap
+# debug-mcp.net Roadmap
 
 ## Completed Features
 
@@ -43,7 +43,7 @@ Subscribe to runtime events (GC collections, JIT compilations, exceptions thrown
 ### Lower Priority
 
 #### 016 - DAP Compatibility Layer
-Debug Adapter Protocol adapter for IDE integration (VS Code, JetBrains). Exposes DotnetMcp capabilities through the standard DAP interface.
+Debug Adapter Protocol adapter for IDE integration (VS Code, JetBrains). Exposes debug-mcp capabilities through the standard DAP interface.
 
 #### 017 - Remote Debugging
 TCP/network transport for debugging processes on remote machines or containers. Extends the architecture beyond local stdio.

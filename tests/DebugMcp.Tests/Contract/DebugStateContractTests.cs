@@ -1,8 +1,8 @@
 using System.Text.Json;
-using NetInspect.Mcp.Models;
+using DebugMcp.Models;
 using FluentAssertions;
 
-namespace NetInspect.Mcp.Tests.Contract;
+namespace DebugMcp.Tests.Contract;
 
 /// <summary>
 /// Contract tests validating the debug_state tool schema compliance.

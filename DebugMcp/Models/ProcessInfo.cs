@@ -1,4 +1,4 @@
-namespace NetInspect.Mcp.Models;
+namespace DebugMcp.Models;
 
 /// <summary>
 /// Information about a debuggable .NET process.

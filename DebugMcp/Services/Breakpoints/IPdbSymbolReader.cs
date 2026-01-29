@@ -1,4 +1,4 @@
-namespace NetInspect.Mcp.Services.Breakpoints;
+namespace DebugMcp.Services.Breakpoints;
 
 /// <summary>
 /// Reads PDB symbol information for source-to-IL mapping.

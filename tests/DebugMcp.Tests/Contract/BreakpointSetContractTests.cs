@@ -1,9 +1,9 @@
 using System.Text.Json;
-using NetInspect.Mcp.Models;
-using NetInspect.Mcp.Models.Breakpoints;
+using DebugMcp.Models;
+using DebugMcp.Models.Breakpoints;
 using FluentAssertions;
 
-namespace NetInspect.Mcp.Tests.Contract;
+namespace DebugMcp.Tests.Contract;
 
 /// <summary>
 /// Contract tests validating the breakpoint_set tool schema compliance.

@@ -1,15 +1,15 @@
 using System.Diagnostics;
-using NetInspect.Mcp.Models;
-using NetInspect.Mcp.Models.Inspection;
-using NetInspect.Mcp.Services;
-using NetInspect.Mcp.Services.Breakpoints;
+using DebugMcp.Models;
+using DebugMcp.Models.Inspection;
+using DebugMcp.Services;
+using DebugMcp.Services.Breakpoints;
 using FluentAssertions;
 using Microsoft.Extensions.Logging;
 using Moq;
-using StackFrame = NetInspect.Mcp.Models.Inspection.StackFrame;
-using ThreadState = NetInspect.Mcp.Models.Inspection.ThreadState;
+using StackFrame = DebugMcp.Models.Inspection.StackFrame;
+using ThreadState = DebugMcp.Models.Inspection.ThreadState;
 
-namespace NetInspect.Mcp.Tests.Performance;
+namespace DebugMcp.Tests.Performance;
 
 /// <summary>
 /// Performance tests validating inspection success criteria:

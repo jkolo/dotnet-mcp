@@ -1,6 +1,6 @@
 using System.Text.RegularExpressions;
 
-namespace NetInspect.Mcp.Services.Breakpoints;
+namespace DebugMcp.Services.Breakpoints;
 
 /// <summary>
 /// Simple condition evaluator that handles hit count conditions and literals.

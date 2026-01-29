@@ -1,4 +1,4 @@
-namespace NetInspect.Mcp.Models.Breakpoints;
+namespace DebugMcp.Models.Breakpoints;
 
 /// <summary>
 /// Represents a position in source code with optional column for lambda targeting.

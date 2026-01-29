@@ -12,7 +12,7 @@ All bugs listed below have been **RESOLVED** as of 2026-01-26.
 
 **Resolution:** Implemented nested property resolution in `ResolveExpressionToValue` method using `TryGetMemberValueAsync` helper. The method now traverses dot-notation paths like `this._currentUser.HomeAddress.City`.
 
-**Tests:** `tests/DotnetMcp.Tests/Integration/NestedInspectionTests.cs`
+**Tests:** `tests/DebugMcp.Tests/Integration/NestedInspectionTests.cs`
 - `SingleLevelFieldAccess_ShouldSucceed`
 - `TwoLevelPropertyAccess_ShouldReturnAddressObject`
 - `ThreeLevelAccess_ShouldReturnStringValue`
@@ -31,7 +31,7 @@ All bugs listed below have been **RESOLVED** as of 2026-01-26.
 1. Added base type traversal in `TryGetFieldValue` and `FindPropertyGetter` methods using `GetTypeDefProps().ptkExtends` to get the base type token.
 2. The traversal continues up the inheritance hierarchy until the member is found or `System.Object` is reached.
 
-**Tests:** `tests/DotnetMcp.Tests/Integration/BaseTypeExpressionTests.cs`
+**Tests:** `tests/DebugMcp.Tests/Integration/BaseTypeExpressionTests.cs`
 - `DirectPropertyAccess_ShouldReturnValue`
 - `ThisKeywordAccess_ShouldReturnValue`
 - `BaseTypePropertyAccess_ShouldReturnInheritedValue`
@@ -51,7 +51,7 @@ All bugs listed below have been **RESOLVED** as of 2026-01-26.
 2. Set `_corDebug = null` to allow fresh initialization on next attach
 3. Added try/catch to handle `CORDBG_E_ILLEGAL_SHUTDOWN_ORDER` gracefully
 
-**Tests:** `tests/DotnetMcp.Tests/Integration/ReattachmentTests.cs`
+**Tests:** `tests/DebugMcp.Tests/Integration/ReattachmentTests.cs`
 - `BasicReattachmentCycle_ShouldSucceed`
 - `MultipleCycles_TenTimes_AllSucceed`
 - `ReattachAfterTargetTerminates_ShouldSucceed`

@@ -1,8 +1,8 @@
-using NetInspect.Mcp.E2E.Support;
-using NetInspect.Mcp.Models.Breakpoints;
-using NetInspect.Mcp.Tests.Helpers;
+using DebugMcp.E2E.Support;
+using DebugMcp.Models.Breakpoints;
+using DebugMcp.Tests.Helpers;
 
-namespace NetInspect.Mcp.E2E.StepDefinitions;
+namespace DebugMcp.E2E.StepDefinitions;
 
 [Binding]
 public sealed class BreakpointSteps

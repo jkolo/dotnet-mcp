@@ -1,7 +1,7 @@
 using System.Diagnostics;
 using System.Text;
 
-namespace NetInspect.Mcp.Tests.Helpers;
+namespace DebugMcp.Tests.Helpers;
 
 /// <summary>
 /// Helper to launch and manage the test target process for debugging tests.
@@ -22,7 +22,7 @@ public sealed class TestTargetProcess : IDisposable
         {
             // Navigate from test assembly location to TestTargetApp output
             var testAssemblyDir = Path.GetDirectoryName(typeof(TestTargetProcess).Assembly.Location)!;
-            // tests/NetInspect.Mcp.Tests/bin/Debug/net10.0 -> tests/TestTargetApp/bin/Debug/net10.0
+            // tests/DebugMcp.Tests/bin/Debug/net10.0 -> tests/TestTargetApp/bin/Debug/net10.0
             var testTargetPath = Path.GetFullPath(Path.Combine(
                 testAssemblyDir, "..", "..", "..", "..", "TestTargetApp", "bin", "Debug", "net10.0", "TestTargetApp.dll"));
             return testTargetPath;

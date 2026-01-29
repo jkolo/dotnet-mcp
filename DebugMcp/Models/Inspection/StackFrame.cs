@@ -1,4 +1,4 @@
-namespace NetInspect.Mcp.Models.Inspection;
+namespace DebugMcp.Models.Inspection;
 
 /// <summary>
 /// Represents a single frame in the call stack.

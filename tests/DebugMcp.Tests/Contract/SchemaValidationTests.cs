@@ -1,11 +1,11 @@
 using System.Text.Json;
-using NetInspect.Mcp.Models;
-using NetInspect.Mcp.Models.Breakpoints;
-using NetInspect.Mcp.Models.Inspection;
+using DebugMcp.Models;
+using DebugMcp.Models.Breakpoints;
+using DebugMcp.Models.Inspection;
 using FluentAssertions;
-using ThreadState = NetInspect.Mcp.Models.Inspection.ThreadState;
+using ThreadState = DebugMcp.Models.Inspection.ThreadState;
 
-namespace NetInspect.Mcp.Tests.Contract;
+namespace DebugMcp.Tests.Contract;
 
 /// <summary>
 /// Schema validation tests ensuring the implementation matches the MCP contract.

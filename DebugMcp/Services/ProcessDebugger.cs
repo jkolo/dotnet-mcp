@@ -7,15 +7,15 @@ using System.Reflection.PortableExecutable;
 using System.Runtime.InteropServices;
 using System.Text;
 using ClrDebug;
-using NetInspect.Mcp.Infrastructure;
-using NetInspect.Mcp.Models;
-using NetInspect.Mcp.Models.Inspection;
-using NetInspect.Mcp.Models.Memory;
-using NetInspect.Mcp.Services.Breakpoints;
+using DebugMcp.Infrastructure;
+using DebugMcp.Models;
+using DebugMcp.Models.Inspection;
+using DebugMcp.Models.Memory;
+using DebugMcp.Services.Breakpoints;
 using Microsoft.Extensions.Logging;
 using static System.Runtime.InteropServices.NativeLibrary;
 
-namespace NetInspect.Mcp.Services;
+namespace DebugMcp.Services;
 
 /// <summary>
 /// Result of an ICorDebugEval function call.

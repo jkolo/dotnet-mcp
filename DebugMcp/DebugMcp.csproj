@@ -5,25 +5,25 @@
         <TargetFramework>net10.0</TargetFramework>
         <ImplicitUsings>enable</ImplicitUsings>
         <Nullable>enable</Nullable>
-        <RootNamespace>NetInspect.Mcp</RootNamespace>
-        <AssemblyName>NetInspect.Mcp</AssemblyName>
+        <RootNamespace>DebugMcp</RootNamespace>
+        <AssemblyName>DebugMcp</AssemblyName>
 
         <!-- .NET Tool Packaging -->
         <PackAsTool>true</PackAsTool>
-        <ToolCommandName>netinspect-mcp</ToolCommandName>
+        <ToolCommandName>debug-mcp</ToolCommandName>
         <RuntimeIdentifier>linux-x64</RuntimeIdentifier>
 
         <!-- NuGet Metadata -->
-        <PackageId>NetInspect.Mcp</PackageId>
+        <PackageId>debug-mcp</PackageId>
         <Authors>Jerzy Kołosowski</Authors>
         <Description>MCP server for debugging .NET applications via the ICorDebug API</Description>
         <PackageLicenseExpression>AGPL-3.0-only</PackageLicenseExpression>
-        <RepositoryUrl>https://github.com/jkolo/netinspect-mcp</RepositoryUrl>
+        <RepositoryUrl>https://github.com/jkolo/debug-mcp</RepositoryUrl>
         <PackageTags>mcp;debugger;dotnet;icordebug</PackageTags>
     </PropertyGroup>
 
     <ItemGroup>
-        <InternalsVisibleTo Include="NetInspect.Mcp.Tests" />
+        <InternalsVisibleTo Include="DebugMcp.Tests" />
     </ItemGroup>
 
     <ItemGroup>

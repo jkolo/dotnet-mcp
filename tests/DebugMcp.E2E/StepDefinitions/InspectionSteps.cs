@@ -1,8 +1,8 @@
-using NetInspect.Mcp.E2E.Support;
-using NetInspect.Mcp.Models.Inspection;
-using NetInspect.Mcp.Models.Memory;
+using DebugMcp.E2E.Support;
+using DebugMcp.Models.Inspection;
+using DebugMcp.Models.Memory;
 
-namespace NetInspect.Mcp.E2E.StepDefinitions;
+namespace DebugMcp.E2E.StepDefinitions;
 
 [Binding]
 public sealed class InspectionSteps

@@ -1,7 +1,7 @@
-using NetInspect.Mcp.E2E.Support;
-using NetInspect.Mcp.Models;
+using DebugMcp.E2E.Support;
+using DebugMcp.Models;
 
-namespace NetInspect.Mcp.E2E.StepDefinitions;
+namespace DebugMcp.E2E.StepDefinitions;
 
 [Binding]
 public sealed class SteppingSteps

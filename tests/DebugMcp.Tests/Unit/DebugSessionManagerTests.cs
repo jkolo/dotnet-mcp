@@ -1,10 +1,10 @@
-using NetInspect.Mcp.Models;
-using NetInspect.Mcp.Services;
+using DebugMcp.Models;
+using DebugMcp.Services;
 using FluentAssertions;
 using Microsoft.Extensions.Logging;
 using Moq;
 
-namespace NetInspect.Mcp.Tests.Unit;
+namespace DebugMcp.Tests.Unit;
 
 /// <summary>
 /// Unit tests for DebugSessionManager service.

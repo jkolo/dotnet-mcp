@@ -1,4 +1,4 @@
-namespace NetInspect.Mcp.Models.Breakpoints;
+namespace DebugMcp.Models.Breakpoints;
 
 /// <summary>
 /// Breakpoint that triggers on exception throws.

@@ -1,6 +1,6 @@
 using System.Text.Json.Serialization;
 
-namespace NetInspect.Mcp.Models;
+namespace DebugMcp.Models;
 
 /// <summary>
 /// Standard error response structure for MCP tools.

@@ -1,4 +1,4 @@
-namespace NetInspect.Mcp.Services.Breakpoints;
+namespace DebugMcp.Services.Breakpoints;
 
 /// <summary>
 /// Interface for evaluating breakpoint condition expressions.

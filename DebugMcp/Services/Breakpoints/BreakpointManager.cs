@@ -1,8 +1,8 @@
 using ClrDebug;
-using NetInspect.Mcp.Models.Breakpoints;
+using DebugMcp.Models.Breakpoints;
 using Microsoft.Extensions.Logging;
 
-namespace NetInspect.Mcp.Services.Breakpoints;
+namespace DebugMcp.Services.Breakpoints;
 
 /// <summary>
 /// Manages breakpoint lifecycle and operations using ICorDebug APIs.

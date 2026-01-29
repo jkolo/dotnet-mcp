@@ -1,4 +1,4 @@
-namespace NetInspect.Mcp.Models;
+namespace DebugMcp.Models;
 
 /// <summary>
 /// Represents a position in source code.

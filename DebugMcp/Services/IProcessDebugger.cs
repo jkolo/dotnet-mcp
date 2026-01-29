@@ -1,9 +1,9 @@
-using NetInspect.Mcp.Models;
-using NetInspect.Mcp.Models.Inspection;
-using NetInspect.Mcp.Models.Memory;
-using NetInspect.Mcp.Models.Modules;
+using DebugMcp.Models;
+using DebugMcp.Models.Inspection;
+using DebugMcp.Models.Memory;
+using DebugMcp.Models.Modules;
 
-namespace NetInspect.Mcp.Services;
+namespace DebugMcp.Services;
 
 /// <summary>
 /// Low-level process debugging operations using ICorDebug.

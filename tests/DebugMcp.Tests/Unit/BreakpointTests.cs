@@ -1,7 +1,7 @@
-using NetInspect.Mcp.Models.Breakpoints;
+using DebugMcp.Models.Breakpoints;
 using FluentAssertions;
 
-namespace NetInspect.Mcp.Tests.Unit;
+namespace DebugMcp.Tests.Unit;
 
 /// <summary>
 /// Unit tests for the Breakpoint model.

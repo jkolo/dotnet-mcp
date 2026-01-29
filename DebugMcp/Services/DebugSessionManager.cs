@@ -1,8 +1,8 @@
-using NetInspect.Mcp.Infrastructure;
-using NetInspect.Mcp.Models;
+using DebugMcp.Infrastructure;
+using DebugMcp.Models;
 using Microsoft.Extensions.Logging;
 
-namespace NetInspect.Mcp.Services;
+namespace DebugMcp.Services;
 
 /// <summary>
 /// Manages the lifecycle of debug sessions.

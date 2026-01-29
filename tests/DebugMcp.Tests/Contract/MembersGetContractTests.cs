@@ -1,7 +1,7 @@
-using NetInspect.Mcp.Models.Modules;
+using DebugMcp.Models.Modules;
 using FluentAssertions;
 
-namespace NetInspect.Mcp.Tests.Contract;
+namespace DebugMcp.Tests.Contract;
 
 /// <summary>
 /// Contract tests validating the members_get tool schema compliance.

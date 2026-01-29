@@ -1,7 +1,7 @@
-using NetInspect.Mcp.Services.Breakpoints;
+using DebugMcp.Services.Breakpoints;
 using FluentAssertions;
 
-namespace NetInspect.Mcp.Tests.Unit;
+namespace DebugMcp.Tests.Unit;
 
 /// <summary>
 /// Unit tests for condition evaluation logic.

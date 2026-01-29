@@ -26,13 +26,13 @@ Templates requiring updates:
 Follow-up TODOs: None
 -->
 
-# DotnetMcp Constitution
+# DebugMcp Constitution
 
 ## Core Principles
 
 ### I. Native First
 
-DotnetMcp interfaces directly with the .NET runtime using ICorDebug APIs. This is
+DebugMcp interfaces directly with the .NET runtime using ICorDebug APIs. This is
 a non-negotiable architectural decision.
 
 - All debugging operations MUST use ICorDebug APIs directly
@@ -44,7 +44,7 @@ a non-negotiable architectural decision.
 
 **Rationale**: Direct runtime access provides superior performance, accuracy, and
 control compared to protocol-based debugger abstractions. This differentiates
-DotnetMcp from DAP-based alternatives.
+DebugMcp from DAP-based alternatives.
 
 ### II. MCP Compliance
 
@@ -108,7 +108,7 @@ diagnose problems without requiring reproduction.
 
 ## MCP Tool Standards
 
-Guidelines for designing and implementing MCP tools in DotnetMcp.
+Guidelines for designing and implementing MCP tools in DebugMcp.
 
 ### Naming
 

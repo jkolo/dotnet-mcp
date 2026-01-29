@@ -1,9 +1,9 @@
 using System.Text.Json;
-using NetInspect.Mcp.Models;
-using NetInspect.Mcp.Models.Inspection;
+using DebugMcp.Models;
+using DebugMcp.Models.Inspection;
 using FluentAssertions;
 
-namespace NetInspect.Mcp.Tests.Contract;
+namespace DebugMcp.Tests.Contract;
 
 /// <summary>
 /// Contract tests validating the evaluate tool schema compliance.

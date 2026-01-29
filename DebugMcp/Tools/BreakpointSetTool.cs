@@ -1,14 +1,14 @@
 using System.ComponentModel;
 using System.Text.Json;
-using NetInspect.Mcp.Infrastructure;
-using NetInspect.Mcp.Models;
-using NetInspect.Mcp.Models.Breakpoints;
-using NetInspect.Mcp.Services;
-using NetInspect.Mcp.Services.Breakpoints;
+using DebugMcp.Infrastructure;
+using DebugMcp.Models;
+using DebugMcp.Models.Breakpoints;
+using DebugMcp.Services;
+using DebugMcp.Services.Breakpoints;
 using Microsoft.Extensions.Logging;
 using ModelContextProtocol.Server;
 
-namespace NetInspect.Mcp.Tools;
+namespace DebugMcp.Tools;
 
 /// <summary>
 /// MCP tool for setting breakpoints at source locations.

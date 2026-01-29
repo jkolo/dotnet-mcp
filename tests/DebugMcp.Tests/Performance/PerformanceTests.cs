@@ -1,12 +1,12 @@
 using System.Diagnostics;
-using NetInspect.Mcp.Models;
-using NetInspect.Mcp.Services;
-using NetInspect.Mcp.Services.Breakpoints;
+using DebugMcp.Models;
+using DebugMcp.Services;
+using DebugMcp.Services.Breakpoints;
 using FluentAssertions;
 using Microsoft.Extensions.Logging;
 using Moq;
 
-namespace NetInspect.Mcp.Tests.Performance;
+namespace DebugMcp.Tests.Performance;
 
 /// <summary>
 /// Performance tests validating success criteria SC-001 and SC-002.
