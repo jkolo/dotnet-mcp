@@ -26,10 +26,10 @@ git push origin v1.1.0-beta.1
 
 ```bash
 # From NuGet.org
-dotnet tool install -g dotnet-mcp
+dotnet tool install -g dotnetmcp
 
 # Specific version
-dotnet tool install -g dotnet-mcp --version 1.0.0
+dotnet tool install -g dotnetmcp --version 1.0.0
 ```
 
 ## Required Secrets

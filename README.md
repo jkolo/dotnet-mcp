@@ -2,7 +2,7 @@
 
 [![.NET](https://img.shields.io/badge/.NET-10.0-purple)](https://dotnet.microsoft.com/)
 [![MCP](https://img.shields.io/badge/MCP-Compatible-blue)](https://modelcontextprotocol.io/)
-[![License](https://img.shields.io/badge/License-MIT-green)](LICENSE)
+[![License](https://img.shields.io/badge/License-AGPL--3.0-blue)](LICENSE)
 
 **MCP server for .NET debugging** — enable AI agents to debug .NET applications interactively.
 
@@ -24,11 +24,11 @@ Unlike similar tools that use external debuggers via DAP protocol, DotnetMcp int
 
 ```bash
 # As .NET global tool
-dotnet tool install -g dotnet-mcp
+dotnet tool install -g dotnetmcp
 
 # As local tool (per-project)
 dotnet new tool-manifest   # if not already present
-dotnet tool install dotnet-mcp
+dotnet tool install dotnetmcp
 
 # Or run from source
 git clone https://github.com/jkolo/dotnet-mcp
@@ -100,4 +100,4 @@ Claude: I'll attach to your application and investigate.
 
 ## License
 
-MIT — see [LICENSE](LICENSE) for details.
+AGPL-3.0 — see [LICENSE](LICENSE) for details.
