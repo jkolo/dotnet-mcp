@@ -30,7 +30,9 @@ jobs:
         run: dotnet test -c Release --no-build
 
       - name: Notify Matrix on failure
-        if: failure() && secrets.MATRIX_HOMESERVER != ''
+        if: failure() && env.HAS_MATRIX == 'true'
+        env:
+          HAS_MATRIX: ${{ secrets.MATRIX_HOMESERVER != '' }}
         uses: s3krit/matrix-message-action@v0.0.3
         with:
           room_id: ${{ secrets.MATRIX_ROOM_ID }}
